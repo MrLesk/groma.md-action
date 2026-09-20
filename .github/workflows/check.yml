@@ -1,0 +1,39 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: .action
+
+      - name: Prepare initialized project fixture
+        shell: bash
+        run: |
+          cp -R .action/test/fixtures/project/. .
+          git init --quiet -b main
+
+      - name: Build architecture website
+        id: map
+        uses: ./.action
+        with:
+          output: site/architecture
+          exclude: |
+            /examples/
+
+      - name: Check workflow inputs
+        run: npm --prefix .action run check
+
+      - name: Verify exported architecture
+        env:
+          EXPORTED_SITE: ${{ steps.map.outputs.output }}
+        run: node .action/test/verify-export.mjs "$EXPORTED_SITE"

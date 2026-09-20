@@ -1,0 +1,66 @@
+name: Groma.md Architecture Map
+description: Scan an initialized Groma project and export its architecture as a static website.
+author: MrLesk
+branding:
+  icon: map
+  color: blue
+
+inputs:
+  output:
+    description: Directory for the exported website, relative to the repository root.
+    default: groma-site
+  exclude:
+    description: Additional global scan exclusion patterns, one per line.
+
+outputs:
+  output:
+    description: Absolute path to the exported website directory.
+    value: ${{ steps.prepare.outputs.output }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: '24'
+        package-manager-cache: false
+
+    - name: Install Groma
+      id: groma
+      shell: bash
+      run: |
+        npm install --global groma.md@0.3.3
+        echo "version=$(groma --version)" >> "$GITHUB_OUTPUT"
+
+    - name: Prepare project
+      id: prepare
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        GROMA_OUTPUT: ${{ inputs.output }}
+        GROMA_EXCLUDE: ${{ inputs.exclude }}
+      run: |
+        groma scanner list
+        node "$GITHUB_ACTION_PATH/prepare.mjs"
+
+    - name: Cache scanner packages
+      uses: actions/cache@v6
+      with:
+        path: ~/.groma/cache/scanners
+        key: groma-scanners-${{ runner.os }}-${{ runner.arch }}-${{ steps.groma.outputs.version }}-${{ steps.prepare.outputs.scanner-key }}
+
+    - name: Restore scanners
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        groma scanner install
+        groma scanner check
+
+    - name: Scan and export
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        GROMA_OUTPUT: ${{ steps.prepare.outputs.output }}
+      run: |
+        groma scan
+        groma export "$GROMA_OUTPUT"

@@ -1,0 +1,7 @@
+{
+  "scanners": [
+    { "id": "javascript", "source": "@groma/scanner-javascript@0.1.0" },
+    { "id": "typescript", "source": "@groma/scanner-typescript@0.1.3" }
+  ],
+  "exclude": ["**/*.generated.*"]
+}
