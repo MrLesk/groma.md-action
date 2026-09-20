@@ -7,14 +7,17 @@ branding:
 
 inputs:
   output:
-    description: Directory for the exported website, relative to the repository root.
+    description: Website root to publish, relative to the repository root.
     default: groma-site
+  theme:
+    description: Publication theme (auto, light, dark, or blueprint).
+    default: auto
   exclude:
     description: Additional global scan exclusion patterns, one per line.
 
 outputs:
   output:
-    description: Absolute path to the exported website directory.
+    description: Absolute website root containing architecture/{theme}/.
     value: ${{ steps.prepare.outputs.output }}
 
 runs:
@@ -38,6 +41,7 @@ runs:
       working-directory: ${{ github.workspace }}
       env:
         GROMA_OUTPUT: ${{ inputs.output }}
+        GROMA_THEME: ${{ inputs.theme }}
         GROMA_EXCLUDE: ${{ inputs.exclude }}
       run: |
         groma scanner list
@@ -60,7 +64,7 @@ runs:
       shell: bash
       working-directory: ${{ github.workspace }}
       env:
-        GROMA_OUTPUT: ${{ steps.prepare.outputs.output }}
+        GROMA_EXPORT: ${{ steps.prepare.outputs.export-directory }}
       run: |
         groma scan
-        groma export "$GROMA_OUTPUT"
+        groma export "$GROMA_EXPORT"

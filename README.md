@@ -14,7 +14,7 @@ The examples use an Ubuntu GitHub-hosted runner. Official scanners include their
 2. Copy [examples/pages.yml](examples/pages.yml) to `.github/workflows/groma.yml`. Change the branch name if your default branch is not `main`.
 3. Push the workflow. Its deployment links to the published map.
 
-Use this complete example when the repository has no existing Pages site. It publishes the map at the project site's root.
+Use this complete example when the repository has no existing Pages site. It publishes the map at `/architecture/blueprint/` beneath the project site, for example `https://<owner>.github.io/<repository>/architecture/blueprint/`.
 
 ## Add to an existing website
 
@@ -24,7 +24,8 @@ Run Groma after your documentation build, then publish the combined website dire
 # Your existing checkout and documentation build write to site/.
 - uses: MrLesk/groma.md-action@main
   with:
-    output: ./site/architecture
+    output: ./site
+    theme: blueprint
     exclude: |
       /examples/
       /test/fixtures/
@@ -35,16 +36,21 @@ Run Groma after your documentation build, then publish the combined website dire
 # Keep your existing Pages deployment job.
 ```
 
-The map is available under `/architecture/`. The Action writes its export into the selected directory; it does not publish or remove the rest of your website.
+The map is available under `/architecture/blueprint/`. The Action writes into that directory inside the website root; it does not publish or remove the rest of your website.
 
 ## Inputs and output
 
 | Input | Default | Meaning |
 | --- | --- | --- |
-| `output` | `groma-site` | Website directory, relative to the repository root. |
+| `output` | `groma-site` | Website root to publish, relative to the repository root. |
+| `theme` | `auto` | `auto`, `light`, `dark`, or `blueprint`. |
 | `exclude` | Empty | Additional global scan patterns, one per line. |
 
-The `output` step output is the absolute path of the generated directory. A later step can upload it to Pages, keep it as a workflow artifact, or send it to another static host.
+The export is written to `<output>/architecture/<theme>/`. The `output` step output is the absolute website root. Upload that root to preserve the theme path on Pages or another static host.
+
+Groma reads the theme from the publication path. An explicit `?theme=` choice takes priority, and visitors can change it in the Theme menu. `auto` follows the visitor's system theme.
+
+**Pending Groma release:** the directory layout is ready, but the pinned Groma `0.3.3` does not read themes from paths. After releasing that Groma change, update the pin, verify the published path opens in the selected theme, and remove this note. See the [release checklist](#releases).
 
 `exclude` appends its ordered patterns to `scanners.json` in the CI checkout. Empty input leaves that file unchanged. Scanner selections, settings, and existing patterns are retained. Subsequent steps see the updated configuration; the Action does not commit it.
 
@@ -60,7 +66,7 @@ The Action installs Groma `0.3.3`, then runs:
 groma scanner install
 groma scanner check
 groma scan
-groma export <output>
+groma export <output>/architecture/<theme>
 ```
 
 The scanner package cache is keyed by runner OS and CPU, Groma version, and configured scanner sources. Package installation still runs after restoration to ensure the configured packages are available. Architecture and exported pages are rebuilt from the checkout on every run.

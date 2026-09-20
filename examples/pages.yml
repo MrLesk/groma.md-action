@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GROMA_THEME: blueprint
+
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -21,6 +24,8 @@ jobs:
       - name: Build architecture website
         id: map
         uses: MrLesk/groma.md-action@main
+        with:
+          theme: ${{ env.GROMA_THEME }}
 
       - uses: actions/upload-pages-artifact@v4
         with:
@@ -34,8 +39,14 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.map-url.outputs.url }}
     steps:
       - name: Publish architecture website
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Link to the architecture map
+        id: map-url
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: echo "url=${PAGE_URL%/}/architecture/$GROMA_THEME/" >> "$GITHUB_OUTPUT"

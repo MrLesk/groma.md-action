@@ -26,7 +26,8 @@ jobs:
         id: map
         uses: ./.action
         with:
-          output: site/architecture
+          output: site
+          theme: blueprint
           exclude: |
             /examples/
 
@@ -35,5 +36,5 @@ jobs:
 
       - name: Verify exported architecture
         env:
-          EXPORTED_SITE: ${{ steps.map.outputs.output }}
+          EXPORTED_SITE: ${{ steps.map.outputs.output }}/architecture/blueprint
         run: node .action/test/verify-export.mjs "$EXPORTED_SITE"

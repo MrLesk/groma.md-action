@@ -3,6 +3,11 @@ import { existsSync } from 'node:fs';
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+const theme = process.env.GROMA_THEME;
+if (!['auto', 'light', 'dark', 'blueprint'].includes(theme)) {
+  throw new Error('Choose a theme: auto, light, dark, or blueprint.');
+}
+
 const directories = ['groma', '.groma'].filter(directory => existsSync(directory));
 if (directories.length > 1) {
   throw new Error('Both groma/ and .groma/ exist; keep one Groma directory.');
@@ -23,4 +28,6 @@ if (patterns.length > 0) {
 const sources = config.scanners.map(scanner => scanner.source).sort();
 const scannerKey = createHash('sha256').update(JSON.stringify(sources)).digest('hex');
 const output = path.resolve(process.env.GROMA_OUTPUT);
-await appendFile(process.env.GITHUB_OUTPUT, 'output=' + output + '\nscanner-key=' + scannerKey + '\n');
+const exportDirectory = path.join(output, 'architecture', theme);
+await appendFile(process.env.GITHUB_OUTPUT,
+  'output=' + output + '\nexport-directory=' + exportDirectory + '\nscanner-key=' + scannerKey + '\n');

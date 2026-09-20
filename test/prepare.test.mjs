@@ -17,12 +17,13 @@ async function checkout(t, initialized = true) {
   return root;
 }
 
-async function prepare(root, exclude = '') {
+async function prepare(root, exclude = '', theme = 'auto') {
   const outputFile = path.join(root, 'action-output');
   await writeFile(outputFile, '');
   await run(process.execPath, [script], {
     cwd: root,
-    env: { ...process.env, GROMA_EXCLUDE: exclude, GROMA_OUTPUT: 'site/architecture map', GITHUB_OUTPUT: outputFile },
+    env: { ...process.env, GROMA_EXCLUDE: exclude, GROMA_THEME: theme,
+      GROMA_OUTPUT: 'website root', GITHUB_OUTPUT: outputFile },
   });
   return Object.fromEntries((await readFile(outputFile, 'utf8')).trim().split('\n').map(line => {
     const separator = line.indexOf('=');
@@ -41,7 +42,8 @@ describe('workflow configuration', { concurrency: true }, () => {
     const actual = JSON.parse(await readFile(filename, 'utf8'));
     assert.deepEqual(actual.scanners, config.scanners);
     assert.deepEqual(actual.exclude, ['**/*.generated.*', '/examples/', '!examples/keep.js']);
-    assert.equal(result.output, path.join(root, 'site/architecture map'));
+    assert.equal(result.output, path.join(root, 'website root'));
+    assert.equal(result['export-directory'], path.join(result.output, 'architecture/auto'));
   });
 
   for (const directory of ['groma', '.groma']) {
@@ -72,5 +74,24 @@ describe('workflow configuration', { concurrency: true }, () => {
     await writeFile(filename, JSON.stringify(config));
     const upgraded = await prepare(root);
     assert.notEqual(upgraded['scanner-key'], first['scanner-key']);
+  });
+
+  it('exports each theme below the website root without changing scanner packages', async t => {
+    const root = await checkout(t);
+    const initial = await prepare(root);
+    for (const theme of ['light', 'dark', 'blueprint']) {
+      const result = await prepare(root, '', theme);
+      assert.equal(result.output, initial.output);
+      assert.equal(result['export-directory'], path.join(result.output, 'architecture', theme));
+      assert.equal(result['scanner-key'], initial['scanner-key']);
+    }
+  });
+
+  it('rejects a theme outside the supported choices before changing scanner configuration', async t => {
+    const root = await checkout(t);
+    const filename = path.join(root, 'groma/scanners.json');
+    const before = await readFile(filename, 'utf8');
+    await assert.rejects(prepare(root, '/examples/', 'sepia'), error => error.code !== 0 && error.stderr.includes('theme'));
+    assert.equal(await readFile(filename, 'utf8'), before);
   });
 });
