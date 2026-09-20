@@ -1,11 +1,11 @@
 ---
 id: TASK-1
 title: Build the reusable Groma map Action
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-09-20 12:02'
-updated_date: '2026-09-20 12:14'
+updated_date: '2026-09-20 12:16'
 labels: []
 dependencies: []
 references:
@@ -44,12 +44,12 @@ Repository maintainers need one reusable build step that restores their existing
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 An initialized repository can use the Action to restore all configured scanners at their selected versions, scan, and export one static website directory.
-- [ ] #2 The output input selects the export directory and the Action exposes that directory for later workflow steps.
-- [ ] #3 The multiline exclude input appends ordered global scan patterns in the CI checkout; omitted or empty input preserves configuration, and all scanner matching stays in Groma.
-- [ ] #4 Scanner packages can be restored from a matching cache while architecture is scanned from the current checkout; the Action release uses a tested Groma version.
-- [ ] #5 A repository without initialized Groma files fails clearly without creating a Groma project.
-- [ ] #6 The dedicated groma.md-action repository contains root Action metadata, usage documentation, a complete main-branch Pages example, and an existing-site integration example.
+- [x] #1 An initialized repository can use the Action to restore all configured scanners at their selected versions, scan, and export one static website directory.
+- [x] #2 The output input selects the export directory and the Action exposes that directory for later workflow steps.
+- [x] #3 The multiline exclude input appends ordered global scan patterns in the CI checkout; omitted or empty input preserves configuration, and all scanner matching stays in Groma.
+- [x] #4 Scanner packages can be restored from a matching cache while architecture is scanned from the current checkout; the Action release uses a tested Groma version.
+- [x] #5 A repository without initialized Groma files fails clearly without creating a Groma project.
+- [x] #6 The dedicated groma.md-action repository contains root Action metadata, usage documentation, a complete main-branch Pages example, and an existing-site integration example.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -75,4 +75,12 @@ Focused checks passed: five concurrent Node tests, Ruby YAML parsing for Action/
 Cold simplicity review: no blockers; kept the two-file production split and focused tests. Applied its naming suggestion by renaming the internal hash output to scanner-key, then reran bun run check (5/5) and git diff --check. Implementer specification review: all six AC have local evidence; remote CI will exercise the composite after the initial push. Quality review traced action.yml -> prepare.mjs -> configured CLI -> exported directory, confirmed inputs are passed through environment variables, version/config authority stays in Groma, exclusion order/settings are preserved, and tests detect the documented wrong outcomes without freezing UI prose. Warm-package smoke: added src/added.js after the first export; the next scan created its component and the refreshed snapshot included it. No further task-scoped deletion or abstraction is needed.
 
 Final full-context review found no blockers and recommended keeping the current two-file production structure, one Groma authority for scanner semantics, package-only caching, and caller-owned publication. No material recommendations need a product decision. Public repository created as MrLesk/groma.md-action. Initial implementation push will run the actual composite on GitHub before task finalization.
+
+Hosted verification passed for implementation commit 0ddb98263990b2a1769f2927f8bce0484bb06ddd: https://github.com/MrLesk/groma.md-action/actions/runs/35510056565. The Ubuntu job ran this repository's actual composite Action, restored both pinned scanners, scanned and exported the fixture, passed all five input tests, and verified the exported source set. Together with the local warm-package rescan and nested-path browser check, this provides evidence for AC 1-6. Both required reviews found no blocking findings. Marketplace release/listing is not part of this implementation delivery.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and pushed the reusable Groma map builder in MrLesk/groma.md-action. It restores configured scanner packages, applies optional global scan exclusions, scans fresh architecture, and exposes a static export directory. Included complete Pages and existing-site examples. Verified with five concurrent tests, a mixed-scanner export on GitHub Actions, a warm-package rescan, nested-path browser inspection, and the required simplicity and complexity reviews.
+<!-- SECTION:FINAL_SUMMARY:END -->
