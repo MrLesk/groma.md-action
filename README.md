@@ -76,3 +76,21 @@ Publishing remains in the calling workflow. PR preview creation, preservation, a
 Run `npm run check` with Node 24. The check runs independent temporary fixtures concurrently; `bun run check` invokes the same suite. GitHub CI also runs the composite Action on the initialized JavaScript/TypeScript fixture and checks the resulting snapshot.
 
 This repository contains the root Action metadata needed for a Marketplace release. Usage currently follows `main`.
+
+## Releases
+
+The Groma version pinned in `action.yml` and the Action's release version are separate. A tag such as `v1` points to an Action release, which installs one tested Groma version.
+
+1. After every Groma release, wait for its Release workflow to succeed and confirm the exact version is available with `npm view groma.md@<version> version`.
+2. Update the `groma.md@<version>` pin in `action.yml` and the version stated in this README. For the first Action release, also change the usage examples here and in `examples/pages.yml` from `@main` to the chosen major tag, such as `@v1`.
+3. Run `bun run check`, commit and push the change, and wait for the **Check** workflow on that exact commit. It must pass the configured-scanner scan and export as well as the input tests.
+4. Draft an Action release with a new full version tag, such as `v1.2.3`, targeting that tested commit. Name the installed Groma version in its release notes. Obtain the maintainer's approval, then publish through [GitHub's Marketplace release flow](https://docs.github.com/en/actions/how-tos/create-and-publish-actions/publish-in-github-marketplace).
+5. **After each Action release, bump its major-version pointer** to that release's commit. For example, after publishing `v1.2.3`, run the following in this repository:
+
+   ```sh
+   git fetch origin tag v1.2.3
+   git tag --force v1 'v1.2.3^{commit}'
+   git push origin refs/tags/v1 --force
+   ```
+
+   Substitute the actual release and matching major version. Keep full version tags fixed, and verify that the major tag resolves to the released commit. This lets workflows using `@v1` receive the update, following [GitHub's Action versioning guidance](https://docs.github.com/en/actions/how-tos/create-and-publish-actions/manage-custom-actions#using-tags-for-release-management).
