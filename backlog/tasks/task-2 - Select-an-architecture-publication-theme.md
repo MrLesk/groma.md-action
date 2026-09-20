@@ -1,11 +1,11 @@
 ---
 id: TASK-2
 title: Select an architecture publication theme
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-09-20 12:29'
-updated_date: '2026-09-20 12:35'
+updated_date: '2026-09-20 12:36'
 labels: []
 dependencies: []
 references:
@@ -37,10 +37,10 @@ And the Action output identifies site as the directory to publish.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The Action accepts theme values auto, light, dark and blueprint, defaulting to Auto as the existing viewer does.
-- [ ] #2 The output input and output identify the website root, while the export is written under architecture/{theme}/ inside it.
-- [ ] #3 Pages and existing-site examples preserve the theme path when uploading the website root; scanner installation, exclusions and package caching keep their existing behavior.
-- [ ] #4 Input tests and CI verify the chosen directory layout; documentation records that path theme selection needs the next Groma release and the later CLI-pin update.
+- [x] #1 The Action accepts theme values auto, light, dark and blueprint, defaulting to Auto as the existing viewer does.
+- [x] #2 The output input and output identify the website root, while the export is written under architecture/{theme}/ inside it.
+- [x] #3 Pages and existing-site examples preserve the theme path when uploading the website root; scanner installation, exclusions and package caching keep their existing behavior.
+- [x] #4 Input tests and CI verify the chosen directory layout; documentation records that path theme selection needs the next Groma release and the later CLI-pin update.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -65,4 +65,12 @@ Implementer specification/quality review: the four AC are covered by input tests
 The full-context review found one example regression: the deployment link still opened the website root. Corrected the Pages example to construct the map URL from the deployed site URL and one shared GROMA_THEME value. No new Action output, redirect, or routing logic is needed. The reviewer otherwise recommended keeping the current ownership, helper and focused tests.
 
 The targeted final-review check confirmed that the nested deployment link is corrected with no regression. YAML parsing and the representative project-site URL check passed. The Groma source implementation is complete as TASK-453; its release and the Action pin remain deferred by the user.
+
+Hosted composite verification passed on implementation commit ee362568073e6358debcdd60f5839a9a7c23c43f: https://github.com/MrLesk/groma.md-action/actions/runs/35511066404. The actual Action exported the mixed-scanner fixture under site/architecture/blueprint, passed all seven preparation tests, and verified the source snapshot at that nested path. The Groma path-reader source is committed separately as 57c0d690 in the shared Groma workspace; its push awaits synchronization of shared main. The user explicitly deferred the Groma release and CLI pin update.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added the theme input (auto, light, dark, blueprint) and made output the website root. Exports now live at <output>/architecture/<theme>/. Updated Pages and existing-site examples, including the nested deployment link and release dependency. Verified with seven tests, the hosted composite scan/export, YAML and URL checks, and a browser using the locally changed Groma. The final review's link correction was applied and confirmed. Groma release and the version-pin update remain intentionally deferred.
+<!-- SECTION:FINAL_SUMMARY:END -->
