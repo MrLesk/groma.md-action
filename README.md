@@ -2,7 +2,7 @@
 
 Add an interactive architecture comparison to your GitHub pull requests. Reviewers see one updated comment with change counts and a link to explore the map, before/after descriptions, and owned-source diffs.
 
-Try the [permanent demo PR](https://github.com/MrLesk/groma.md-demo/pull/1): checkout moves receipt delivery into a separate worker. Its bot comment opens the real comparison.
+Try the [permanent demo PR](https://github.com/MrLesk/groma.md-action/pull/2): it contains the actual code that adds this Action’s automatic PR comparisons. Its bot comment opens the before/after map, including the new comparison exporter and preview publisher.
 
 ## Add PR comparisons
 
