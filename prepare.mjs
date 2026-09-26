@@ -7,11 +7,14 @@ const theme = process.env.GROMA_THEME;
 if (!['auto', 'light', 'dark', 'blueprint'].includes(theme)) {
   throw new Error('Choose a theme: auto, light, dark, or blueprint.');
 }
+const from = process.env.GROMA_FROM ?? '';
+const revision = process.env.GROMA_REVISION ?? '';
+if (Boolean(from) !== Boolean(revision)) throw new Error('Supply both from and revision for a comparison.');
+const patterns = (process.env.GROMA_EXCLUDE ?? '').split(/\r?\n/).filter(line => line.trim() !== '');
+if (from && patterns.length) throw new Error('Comparison uses committed architecture; exclude only applies to scanning.');
 
 const directories = ['groma', '.groma'].filter(directory => existsSync(directory));
-if (directories.length > 1) {
-  throw new Error('Both groma/ and .groma/ exist; keep one Groma directory.');
-}
+if (directories.length > 1) throw new Error('Both groma/ and .groma/ exist; keep one Groma directory.');
 const directory = directories[0];
 if (!directory || !['index.md', 'project.md'].every(file => existsSync(path.join(directory, file)))) {
   throw new Error('Initialize Groma locally with groma init and commit its project files before using this Action.');
@@ -19,7 +22,6 @@ if (!directory || !['index.md', 'project.md'].every(file => existsSync(path.join
 
 const filename = path.join(directory, 'scanners.json');
 const config = JSON.parse(await readFile(filename, 'utf8'));
-const patterns = (process.env.GROMA_EXCLUDE ?? '').split(/\r?\n/).filter(line => line.trim() !== '');
 if (patterns.length > 0) {
   config.exclude = [...(config.exclude ?? []), ...patterns];
   await writeFile(filename, JSON.stringify(config, null, 2) + '\n');
@@ -30,4 +32,4 @@ const scannerKey = createHash('sha256').update(JSON.stringify(sources)).digest('
 const output = path.resolve(process.env.GROMA_OUTPUT);
 const exportDirectory = path.join(output, 'architecture', theme);
 await appendFile(process.env.GITHUB_OUTPUT,
-  'output=' + output + '\nexport-directory=' + exportDirectory + '\nscanner-key=' + scannerKey + '\n');
+  `output=${output}\nexport-directory=${exportDirectory}\nscanner-key=${scannerKey}\nconfig=${filename}\n`);
