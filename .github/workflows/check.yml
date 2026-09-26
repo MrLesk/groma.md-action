@@ -38,3 +38,45 @@ jobs:
         env:
           EXPORTED_SITE: ${{ steps.map.outputs.output }}/architecture/blueprint
         run: node .action/test/verify-export.mjs "$EXPORTED_SITE"
+
+      - name: Prepare committed comparison
+        id: commits
+        shell: bash
+        run: |
+          git config user.name 'Groma fixture'
+          git config user.email 'fixture@example.com'
+          git add groma src examples
+          git commit -m 'Before'
+          echo "from=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          sed -i "s/return 'catalog'/return 'updated catalog'/" src/client.js
+          git add src/client.js
+          git commit -m 'After'
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          mkdir fixture-scanner
+          cat > fixture-scanner/package.json <<'JSON'
+          {"name":"fixture-scanner","version":"1.0.0","type":"module","groma":{"scanner":{"id":"javascript","entry":"./index.mjs","include":["**/*.js"]}}}
+          JSON
+          cat > fixture-scanner/index.mjs <<'JS'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync('scanner-executed', 'unexpected scanner execution');
+          throw new Error('PR scanner must not execute');
+          JS
+          node --input-type=module -e '
+            import {readFileSync, writeFileSync} from "node:fs";
+            const config = JSON.parse(readFileSync("groma/scanners.json"));
+            config.scanners.find(scanner => scanner.id === "javascript").source = "./fixture-scanner";
+            writeFileSync("groma/scanners.json", JSON.stringify(config));
+          '
+
+      - name: Build committed comparison
+        id: comparison
+        uses: ./.action
+        with:
+          output: comparison-site
+          from: ${{ steps.commits.outputs.from }}
+          revision: ${{ steps.commits.outputs.revision }}
+
+      - name: Verify committed comparison
+        env:
+          EXPORTED_SITE: ${{ steps.comparison.outputs.directory }}
+        run: node .action/test/verify-export.mjs "$EXPORTED_SITE" comparison
