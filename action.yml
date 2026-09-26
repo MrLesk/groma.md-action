@@ -1,5 +1,5 @@
 name: Groma.md Architecture Map
-description: Scan an initialized Groma project and export its architecture as a static website.
+description: Export an architecture map or compare two committed revisions.
 author: MrLesk
 branding:
   icon: map
@@ -7,18 +7,28 @@ branding:
 
 inputs:
   output:
-    description: Website root to publish, relative to the repository root.
+    description: Website root, relative to the repository root.
     default: groma-site
   theme:
     description: Publication theme (auto, light, dark, or blueprint).
     default: auto
   exclude:
-    description: Additional global scan exclusion patterns, one per line.
+    description: Additional scan exclusion patterns, one per line. For single-checkout builds only.
+  from:
+    description: Earlier commit to compare. Requires revision.
+  revision:
+    description: Later commit to compare. Requires from.
 
 outputs:
   output:
     description: Absolute website root containing architecture/{theme}/.
     value: ${{ steps.prepare.outputs.output }}
+  directory:
+    description: Absolute exported map directory.
+    value: ${{ steps.prepare.outputs.export-directory }}
+  summary:
+    description: Comparison JSON file, available when from and revision are supplied.
+    value: ${{ steps.compare.outputs.summary }}
 
 runs:
   using: composite
@@ -32,39 +42,45 @@ runs:
       id: groma
       shell: bash
       run: |
-        npm install --global groma.md@0.3.3
+        npm install --global groma.md@0.6.0
         echo "version=$(groma --version)" >> "$GITHUB_OUTPUT"
 
     - name: Prepare project
       id: prepare
       shell: bash
-      working-directory: ${{ github.workspace }}
       env:
         GROMA_OUTPUT: ${{ inputs.output }}
         GROMA_THEME: ${{ inputs.theme }}
         GROMA_EXCLUDE: ${{ inputs.exclude }}
-      run: |
-        groma scanner list
-        node "$GITHUB_ACTION_PATH/prepare.mjs"
+        GROMA_FROM: ${{ inputs.from }}
+        GROMA_REVISION: ${{ inputs.revision }}
+      run: node "$GITHUB_ACTION_PATH/prepare.mjs"
 
     - name: Cache scanner packages
+      if: inputs.from == '' && inputs.revision == ''
       uses: actions/cache@v6
       with:
         path: ~/.groma/cache/scanners
         key: groma-scanners-${{ runner.os }}-${{ runner.arch }}-${{ steps.groma.outputs.version }}-${{ steps.prepare.outputs.scanner-key }}
 
-    - name: Restore scanners
-      shell: bash
-      working-directory: ${{ github.workspace }}
-      run: |
-        groma scanner install
-        groma scanner check
-
     - name: Scan and export
+      if: inputs.from == '' && inputs.revision == ''
       shell: bash
-      working-directory: ${{ github.workspace }}
       env:
         GROMA_EXPORT: ${{ steps.prepare.outputs.export-directory }}
       run: |
+        groma scanner install
+        groma scanner check
         groma scan
         groma export "$GROMA_EXPORT"
+
+    - name: Export committed comparison
+      if: inputs.from != '' && inputs.revision != ''
+      id: compare
+      shell: bash
+      env:
+        GROMA_EXPORT: ${{ steps.prepare.outputs.export-directory }}
+        GROMA_FROM: ${{ inputs.from }}
+        GROMA_REVISION: ${{ inputs.revision }}
+        GROMA_CONFIG: ${{ steps.prepare.outputs.config }}
+      run: node "$GITHUB_ACTION_PATH/comparison.mjs"
