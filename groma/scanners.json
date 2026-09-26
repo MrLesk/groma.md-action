@@ -1,0 +1,32 @@
+{
+  "scanners": [
+    {
+      "id": "javascript",
+      "source": "@groma/scanner-javascript@0.2.0",
+      "include": [
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.cjs",
+        "**/*.jsx",
+        "**/package.json",
+        "**/*.html",
+        "**/project.json",
+        "**/nx.json"
+      ],
+      "exclude": [
+        "*.min.js",
+        "*.min.mjs",
+        "*.min.cjs",
+        "*.min.jsx",
+        "node_modules/",
+        "dist/",
+        "build/",
+        "coverage/"
+      ]
+    }
+  ],
+  "exclude": [
+    "/test/",
+    "/backlog/"
+  ]
+}
