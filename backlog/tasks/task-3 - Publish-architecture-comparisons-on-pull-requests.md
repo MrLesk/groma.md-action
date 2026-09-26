@@ -1,11 +1,11 @@
 ---
 id: TASK-3
 title: Publish architecture comparisons on pull requests
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-09-26 16:25'
-updated_date: '2026-09-26 16:44'
+updated_date: '2026-09-26 16:55'
 labels: []
 dependencies: []
 documentation:
@@ -37,11 +37,11 @@ PR reviewers need one automatic comment that opens the architecture and owned-so
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 An initialized repository can export two committed revisions without scanning or installing repository-selected scanners; ordinary single-checkout builds retain their scan/export flow.
-- [ ] #2 A documented complete public-repository workflow compares the PR merge base with its actual head, publishes a separate retained preview, and posts or updates one comment with component and relationship counts plus a direct comparison link.
-- [ ] #3 PR updates refresh the same comment and preview without deleting other published previews; publication runs separately from read-only comparison building and does not execute PR-supplied scripts.
-- [ ] #4 The workflow reports an empty comparison accurately, makes the compared commits visible, and never silently publishes a private repository or replaces an existing unrelated Pages site.
-- [ ] #5 An implementation PR has passing automated checks, and a permanent demo PR shows a real code and architecture change through the documented workflow with a verified public comparison link.
+- [x] #1 An initialized repository can export two committed revisions without scanning or installing repository-selected scanners; ordinary single-checkout builds retain their scan/export flow.
+- [x] #2 A documented complete public-repository workflow compares the PR merge base with its actual head, publishes a separate retained preview, and posts or updates one comment with component and relationship counts plus a direct comparison link.
+- [x] #3 PR updates refresh the same comment and preview without deleting other published previews; publication runs separately from read-only comparison building and does not execute PR-supplied scripts.
+- [x] #4 The workflow reports an empty comparison accurately, makes the compared commits visible, and never silently publishes a private repository or replaces an existing unrelated Pages site.
+- [x] #5 An implementation PR has passing automated checks, and a permanent demo PR shows a real code and architecture change through the documented workflow with a verified public comparison link.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -64,4 +64,12 @@ Implementation PR: https://github.com/MrLesk/groma.md-action/pull/1. Permanent d
 Implementer specification review: AC1–4 map directly to the two Action entry points, documented workflow, and focused checks; AC5 awaits public deployment. Quality review traced inputs → CLI export → JSON counts → retained branch → Pages → comment; no blocking code defect found. Demo browser verification confirmed the changed-only hierarchy, counts, readable Checkout before/after text, and the exact +3/-3 source diff. Demo cold simplicity review passed. Existing Groma limitation: an authored relationship to a deleted source remains as an unresolved Markdown row, absent from the current map; changing core relationship deletion is outside scope.
 
 Final full-context complexity review passed; corrected README input/output wording. Actual CLI regression proof passed against the release source: direct export executed a controlled local scanner marker, while exportComparison suppressed it and still exported the modified-source diff. The CI fixture now uses a valid scanner manifest to exercise that same boundary.
+
+Groma 0.6.0 release run 36255479008 succeeded and npm availability was verified. Action runs 36256529351 and 36256532192 passed all tests plus real scanner and comparison exports. Demo run 36256894812 published the first preview; run 36257097053 published the next head. GitHub API confirms exactly one bot comment, ID 5848070088, updated to 92b8b5a. The unchanged public URL serves comparison.json for that head and merge base 2e48783, while main is newer. Browser verification of the public site confirmed hierarchy, changed descriptions, and source diff. No blocking review findings remain.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Delivered the comparison build Action, retained Pages publisher, complete public-PR workflow, and setup documentation. Comparisons use committed architecture and owned source without executing repository scanners. Verified 17 Node tests, ordinary and comparison CLI exports in CI, private/existing-site guards and preview preservation tests, a real public deployment and browser flow, and a second push updating the same comment and preview. Implementation PR: https://github.com/MrLesk/groma.md-action/pull/1. Permanent draft demo: https://github.com/MrLesk/groma.md-demo/pull/1. Cold, implementer, and full-context reviews passed.
+<!-- SECTION:FINAL_SUMMARY:END -->
