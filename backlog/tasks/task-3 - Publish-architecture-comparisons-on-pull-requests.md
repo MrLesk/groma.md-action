@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-09-26 16:25'
-updated_date: '2026-09-26 16:42'
+updated_date: '2026-09-26 16:44'
 labels: []
 dependencies: []
 documentation:
@@ -62,4 +62,6 @@ Cold simplicity review passed: the reviewer traced build → scanner-hook-free e
 Implementation PR: https://github.com/MrLesk/groma.md-action/pull/1. Permanent draft demo: https://github.com/MrLesk/groma.md-demo/pull/1. Demo code test passes and local current-Groma export reports components added=2 modified=1 removed=1; relationships added=2 modified=0 removed=1. Groma 0.6.0 release prerequisites are still building Windows scanners; initial Action CI failures are solely npm version unavailable, to be rerun after publication.
 
 Implementer specification review: AC1–4 map directly to the two Action entry points, documented workflow, and focused checks; AC5 awaits public deployment. Quality review traced inputs → CLI export → JSON counts → retained branch → Pages → comment; no blocking code defect found. Demo browser verification confirmed the changed-only hierarchy, counts, readable Checkout before/after text, and the exact +3/-3 source diff. Demo cold simplicity review passed. Existing Groma limitation: an authored relationship to a deleted source remains as an unresolved Markdown row, absent from the current map; changing core relationship deletion is outside scope.
+
+Final full-context complexity review passed; corrected README input/output wording. Actual CLI regression proof passed against the release source: direct export executed a controlled local scanner marker, while exportComparison suppressed it and still exported the modified-source diff. The CI fixture now uses a valid scanner manifest to exercise that same boundary.
 <!-- SECTION:NOTES:END -->

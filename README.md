@@ -22,7 +22,7 @@ Previews live under `/pr-<number>/architecture/auto/`. They stay on the `groma-p
 
 ### Existing Pages sites
 
-The complete workflow owns a dedicated Pages site. It refuses a repository with an existing unrelated Pages deployment or an unrecognized `groma-previews` branch. If you already publish documentation, use the build Action's `from`, `revision`, `output`, and `summary` outputs with your existing publisher. Do not run two publishers for one Pages site.
+The complete workflow owns a dedicated Pages site. It refuses a repository with an existing unrelated Pages deployment or an unrecognized `groma-previews` branch. If you already publish documentation, use the build Action's `from` and `revision` inputs, then pass its `output` and `summary` outputs to your existing publisher. Do not run two publishers for one Pages site.
 
 ### What runs on a PR
 

@@ -54,7 +54,7 @@ jobs:
           echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           mkdir fixture-scanner
           cat > fixture-scanner/package.json <<'JSON'
-          {"type":"module","groma":{"scanner":{"id":"javascript","entry":"./index.mjs"}}}
+          {"name":"fixture-scanner","version":"1.0.0","type":"module","groma":{"scanner":{"id":"javascript","entry":"./index.mjs","include":["**/*.js"]}}}
           JSON
           cat > fixture-scanner/index.mjs <<'JS'
           import { writeFileSync } from 'node:fs';
