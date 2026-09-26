@@ -1,11 +1,11 @@
 ---
 id: TASK-3
 title: Publish architecture comparisons on pull requests
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-09-26 16:25'
-updated_date: '2026-09-26 16:56'
+updated_date: '2026-09-26 16:59'
 labels: []
 dependencies: []
 documentation:
@@ -39,7 +39,7 @@ PR reviewers need one automatic comment that opens the architecture and owned-so
 <!-- AC:BEGIN -->
 - [x] #1 An initialized repository can export two committed revisions without scanning or installing repository-selected scanners; ordinary single-checkout builds retain their scan/export flow.
 - [x] #2 A documented complete public-repository workflow compares the PR merge base with its actual head, publishes a separate retained preview, and posts or updates one comment with component and relationship counts plus a direct comparison link.
-- [ ] #3 PR updates refresh the same comment and preview without deleting other published previews; publication runs separately from read-only comparison building and does not execute PR-supplied scripts.
+- [x] #3 PR updates refresh the same comment and preview without deleting other published previews; publication runs separately from read-only comparison building and does not execute PR-supplied scripts.
 - [x] #4 The workflow reports an empty comparison accurately, makes the compared commits visible, and never silently publishes a private repository or replaces an existing unrelated Pages site.
 - [x] #5 An implementation PR has passing automated checks, and a permanent demo PR shows a real code and architecture change through the documented workflow with a verified public comparison link.
 <!-- AC:END -->
@@ -68,4 +68,12 @@ Implementer specification review: AC1–4 map directly to the two Action entry p
 Final full-context complexity review passed; corrected README input/output wording. Actual CLI regression proof passed against the release source: direct export executed a controlled local scanner marker, while exportComparison suppressed it and still exported the modified-source diff. The CI fixture now uses a valid scanner manifest to exercise that same boundary.
 
 Groma 0.6.0 release run 36255479008 succeeded and npm availability was verified. Action runs 36256529351 and 36256532192 passed all tests plus real scanner and comparison exports. Demo run 36256894812 published the first preview; run 36257097053 published the next head. GitHub API confirms exactly one bot comment, ID 5848070088, updated to 92b8b5a. The unchanged public URL serves comparison.json for that head and merge base 2e48783, while main is newer. Browser verification of the public site confirmed hierarchy, changed descriptions, and source diff. No blocking review findings remain.
+
+The cache fix uses existing Groma revision/from URL parameters, with no new model or abstraction. Own targeted quality review passed; 17 local tests and exact-code CI runs 36257253710/36257255882 pass. Demo run 36257284472 used the updated Action and retained bot comment ID 5848070088. The exact new comment URL opened the latest a274189 revision immediately in the previously used browser. This closes the reproduced repeat-visit failure.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Delivered committed PR comparison builds, a retained Pages publisher, one updated PR comment, and a complete public-repository workflow. Groma remains the comparison authority and repository scanners do not execute. Verified 17 Node tests, real CLI scan/comparison CI checks, a public runnable demo, unchanged comment identity across pushes, correct merge-base selection, and fresh browser data through commit-specific links. Cold, implementer, and full-context reviews passed. Implementation PR: https://github.com/MrLesk/groma.md-action/pull/1. Permanent demo: https://github.com/MrLesk/groma.md-demo/pull/1.
+<!-- SECTION:FINAL_SUMMARY:END -->
