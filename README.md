@@ -1,102 +1,98 @@
 # Groma.md Action
 
-Build a static [Groma](https://github.com/MrLesk/Groma.md) architecture map from an initialized repository. This Action restores the project's configured scanners, scans the checkout, and exports one website directory.
+Add an interactive architecture comparison to your GitHub pull requests. Reviewers see one updated comment with change counts and a link to explore the map, before/after descriptions, and owned-source diffs.
 
-## Before using the Action
+## Add PR comparisons
 
-Initialize Groma and select scanners locally. Commit the architecture in `groma/` or `.groma/`, including `scanners.json`. The Action uses those selections and does not initialize a project or upgrade scanner versions.
+For a **public repository with no existing GitHub Pages site**:
 
-The examples use an Ubuntu GitHub-hosted runner. Official scanners include their analysis tools, so the fixture and basic source scan do not need the application's dependencies or build. Follow any setup required by your own scanner packages. Local scanner paths must be available in the checkout.
+1. Initialize Groma locally, curate its architecture, and commit `groma/` or `.groma/`, including `scanners.json`. Both compared commits need committed architecture.
+2. In **Settings → Pages**, select **GitHub Actions**.
+3. Copy [examples/pull-request.yml](examples/pull-request.yml) to `.github/workflows/groma-pr.yml` on your default branch. Open a PR.
 
-## Publish to GitHub Pages
+The workflow needs no extra account or secret. It uses the repository's `GITHUB_TOKEN`; organization policies must allow its declared write permissions. Fork contributions use the same flow.
 
-1. In the repository's **Settings → Pages**, select **GitHub Actions** as the publishing source.
-2. Copy [examples/pages.yml](examples/pages.yml) to `.github/workflows/groma.yml`. Change the branch name if your default branch is not `main`.
-3. Push the workflow. Its deployment links to the published map.
+The PR gets one comment showing added, modified, and removed components and relationships. Every push updates that comment and its comparison URL. A PR with no architecture or owned-source changes gets an explicit empty result. The comment links to the exact compared commits.
 
-Use this complete example when the repository has no existing Pages site. It publishes the map at `/architecture/blueprint/` beneath the project site, for example `https://<owner>.github.io/<repository>/architecture/blueprint/`.
+The comparison starts at the PR's **merge base** (the last common commit with the target branch) and ends at its actual head commit. This shows what the PR introduces, including when the target branch has advanced. Groma owns all change detection; this Action only counts the change facts it exports.
 
-## Add to an existing website
+Previews live under `/pr-<number>/architecture/auto/`. They stay on the `groma-previews` branch and the Pages site after PR closure. Publishing another PR preserves earlier previews. There is no automatic cleanup or artifact-expiration dependency for published links.
 
-Run Groma after your documentation build, then publish the combined website directory:
+### Existing Pages sites
+
+The complete workflow owns a dedicated Pages site. It refuses a repository with an existing unrelated Pages deployment or an unrecognized `groma-previews` branch. If you already publish documentation, use the build Action's `from`, `revision`, `output`, and `summary` outputs with your existing publisher. Do not run two publishers for one Pages site.
+
+### What runs on a PR
+
+The read-only `compare` job checks out the PR, reads its committed architecture and source, and exports both revisions. It does **not** scan, install repository-selected scanners, install application dependencies, or execute PR scripts. Optional scanner source-outline hooks are disabled for this export; source text and diffs remain available. The temporary scanner configuration is restored after export.
+
+The separate `publish` job downloads the generated site, updates only this PR's preview directory, deploys Pages, and then updates the comment. Its workflow and Actions come from trusted references. Keep that separation when adapting the example, and never add PR-supplied commands to the job with write permissions. Builds for superseded PR commits are skipped before publication.
+
+The published website includes architecture-owned source from both commits and is public. This complete workflow rejects private repositories. GitHub Pages is static: readers need no Groma installation or GitHub login for a public preview.
+
+## Publish a current architecture map
+
+For a map of the current checkout, use [examples/pages.yml](examples/pages.yml). It scans using the committed scanner selections and exports to `/architecture/blueprint/`. Select **GitHub Actions** in Pages settings first; use this complete example only when the repository has no existing Pages site.
+
+To add a map to a website you already build:
 
 ```yaml
-# Your existing checkout and documentation build write to site/.
+# Your documentation build has already written site/.
 - uses: MrLesk/groma.md-action@main
   with:
-    output: ./site
+    output: site
     theme: blueprint
     exclude: |
       /examples/
       /test/fixtures/
 
-- uses: actions/upload-pages-artifact@v4
-  with:
-    path: ./site
-# Keep your existing Pages deployment job.
+# Keep your existing website publisher and publish site/.
 ```
 
-The map is available under `/architecture/blueprint/`. The Action writes into that directory inside the website root; it does not publish or remove the rest of your website.
+The scanner packages must be selected and committed locally. Official scanners include their analysis tools; follow any setup required by custom scanners. The Action does not initialize Groma or upgrade the project's scanner versions.
 
-## Inputs and output
+## Build inputs and outputs
 
 | Input | Default | Meaning |
 | --- | --- | --- |
-| `output` | `groma-site` | Website root to publish, relative to the repository root. |
+| `output` | `groma-site` | Website root, relative to the checkout. |
 | `theme` | `auto` | `auto`, `light`, `dark`, or `blueprint`. |
-| `exclude` | Empty | Additional global scan patterns, one per line. |
+| `exclude` | Empty | Additional scan patterns, one per line; single-checkout builds only. |
+| `from` | Empty | Earlier comparison commit. Supply with `revision`. |
+| `revision` | Empty | Later comparison commit. Supply with `from`. |
 
-The export is written to `<output>/architecture/<theme>/`. The `output` step output is the absolute website root. Upload that root to preserve the theme path on Pages or another static host.
+| Output | Meaning |
+| --- | --- |
+| `output` | Absolute website root. |
+| `directory` | Exported map at `<output>/architecture/<theme>/`. |
+| `summary` | Comparison JSON path, with `from`, `revision`, and `components`/`relationships` counts for `added`, `modified`, and `removed`. Empty for a single-checkout build. |
 
-Groma reads the theme from the publication path. An explicit `?theme=` choice takes priority, and visitors can change it in the Theme menu. `auto` follows the visitor's system theme.
+Fetch both revisions and enough history to find the merge base. The full PR example uses `fetch-depth: 0` and explicit commit hashes.
 
-**Pending Groma release:** the directory layout is ready, but the pinned Groma `0.3.3` does not read themes from paths. After releasing that Groma change, update the pin, verify the published path opens in the selected theme, and remove this note. See the [release checklist](#releases).
+Groma reads the theme from the publication path; `?theme=` overrides it, and visitors can use the Theme menu. `auto` follows the reader's system theme. Colors match the map and code diffs across all themes.
 
-`exclude` appends its ordered patterns to `scanners.json` in the CI checkout. Empty input leaves that file unchanged. Scanner selections, settings, and existing patterns are retained. Subsequent steps see the updated configuration; the Action does not commit it.
-
-Patterns use Groma's existing Gitignore rules, relative to the repository root. They apply across all configured scanners. Later `!pattern` entries can reverse earlier matches under those rules.
-
-**Exclusions control scanning. They do not hide or delete architecture already stored in Groma.** An export can include architecture-owned source and Backlog task details. Choose the exported content and host accordingly. See [Groma's exclusion contract](https://github.com/MrLesk/Groma.md/blob/main/docs/scanners/index.md#excluding-source-evidence).
-
-## Execution and caching
-
-The Action installs Groma `0.3.3`, then runs:
-
-```sh
-groma scanner install
-groma scanner check
-groma scan
-groma export <output>/architecture/<theme>
-```
-
-The scanner package cache is keyed by runner OS and CPU, Groma version, and configured scanner sources. Package installation still runs after restoration to ensure the configured packages are available. Architecture and exported pages are rebuilt from the checkout on every run.
-
-Publishing remains in the calling workflow. PR preview creation, preservation, and cleanup are not handled by this Action. A PR workflow can use the same builder with its selected checkout and publisher.
+`exclude` appends ordered Gitignore-style patterns to the CI checkout's `scanners.json`. Empty input leaves it unchanged. Later `!pattern` entries can reverse earlier matches under Groma's rules. Exclusions control scanning, not architecture already committed; they are rejected for comparisons. See [Groma's exclusion contract](https://github.com/MrLesk/groma.md/blob/main/docs/scanners/index.md#excluding-source-evidence).
 
 ## Development
 
-- `action.yml` owns runtime setup, the scanner cache, and CLI orchestration.
-- `prepare.mjs` translates workflow inputs into the existing scanner configuration.
-- Groma owns scanner validation, exclusion matching, architecture meaning, and export.
+The Action installs Groma `0.6.0`.
 
-Run `npm run check` with Node 24. The check runs independent temporary fixtures concurrently; `bun run check` invokes the same suite. GitHub CI also runs the composite Action on the initialized JavaScript/TypeScript fixture and checks the resulting snapshot.
+- `action.yml` and `prepare.mjs` own build inputs, runtime setup, and the scanner cache for ordinary scan/export builds.
+- `comparison.mjs` exports committed revisions with scanner hooks disabled and reads Groma's counts from the generated JSON payload.
+- `publish/action.yml` and `publish/publish.mjs` own retained Pages previews and one marked PR comment.
+- `examples/pull-request.yml` connects the read-only build and separate publisher.
 
-This repository contains the root Action metadata needed for a Marketplace release. Usage currently follows `main`.
+This adds no architecture model. In OKF, the committed Markdown remains readable descriptions and links. C4 actors, systems, containers, components, and relationships keep their existing meaning. Groma interprets source ownership and comparison state; the Action owns GitHub delivery only. No language-specific build command is assumed.
+
+Run `npm run check` with Node 24 (or `bun run check`). Tests use independent temporary directories and run concurrently. GitHub CI also runs the root Action against an initialized JavaScript/TypeScript fixture and verifies the exported sources.
+
+Usage follows `main` until an Action release is published. Pin an exact reviewed commit when adopting it before that release.
 
 ## Releases
 
-The Groma version pinned in `action.yml` and the Action's release version are separate. A tag such as `v1` points to an Action release, which installs one tested Groma version.
+The pinned Groma CLI version and the Action version are separate.
 
-1. After every Groma release, wait for its Release workflow to succeed and confirm the exact version is available with `npm view groma.md@<version> version`.
-2. Update the `groma.md@<version>` pin in `action.yml` and the version stated in this README. For the first Action release, also change the usage examples here and in `examples/pages.yml` from `@main` to the chosen major tag, such as `@v1`.
-3. Run `bun run check`, commit and push the change, and wait for the **Check** workflow on that exact commit. It must pass the configured-scanner scan and export as well as the input tests.
-4. Draft an Action release with a new full version tag, such as `v1.2.3`, targeting that tested commit. Name the installed Groma version in its release notes. Obtain the maintainer's approval, then publish through [GitHub's Marketplace release flow](https://docs.github.com/en/actions/how-tos/create-and-publish-actions/publish-in-github-marketplace).
-5. **After each Action release, bump its major-version pointer** to that release's commit. For example, after publishing `v1.2.3`, run the following in this repository:
-
-   ```sh
-   git fetch origin tag v1.2.3
-   git tag --force v1 'v1.2.3^{commit}'
-   git push origin refs/tags/v1 --force
-   ```
-
-   Substitute the actual release and matching major version. Keep full version tags fixed, and verify that the major tag resolves to the released commit. This lets workflows using `@v1` receive the update, following [GitHub's Action versioning guidance](https://docs.github.com/en/actions/how-tos/create-and-publish-actions/manage-custom-actions#using-tags-for-release-management).
+1. Wait for Groma's Release workflow and confirm `npm view groma.md@<version> version`.
+2. Update the CLI pin and this README, run `npm run check`, then verify the **Check** workflow on that exact commit.
+3. With maintainer approval, publish an Action release through [GitHub Marketplace](https://docs.github.com/en/actions/how-tos/create-and-publish-actions/publish-in-github-marketplace), and change the example references to its major tag, such as `@v1`.
+4. Move that major tag to each tested Action release; keep full version tags fixed.
