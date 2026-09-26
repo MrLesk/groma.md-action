@@ -17,13 +17,13 @@ async function checkout(t, initialized = true) {
   return root;
 }
 
-async function prepare(root, exclude = '', theme = 'auto') {
+async function prepare(root, exclude = '', theme = 'auto', revisions = {}) {
   const outputFile = path.join(root, 'action-output');
   await writeFile(outputFile, '');
   await run(process.execPath, [script], {
     cwd: root,
     env: { ...process.env, GROMA_EXCLUDE: exclude, GROMA_THEME: theme,
-      GROMA_OUTPUT: 'website root', GITHUB_OUTPUT: outputFile },
+      GROMA_OUTPUT: 'website root', GITHUB_OUTPUT: outputFile, ...revisions },
   });
   return Object.fromEntries((await readFile(outputFile, 'utf8')).trim().split('\n').map(line => {
     const separator = line.indexOf('=');
@@ -70,7 +70,7 @@ describe('workflow configuration', { concurrency: true }, () => {
     assert.equal(first['scanner-key'], excluded['scanner-key']);
     const filename = path.join(root, 'groma/scanners.json');
     const config = JSON.parse(await readFile(filename, 'utf8'));
-    config.scanners[0].source = '@groma/scanner-javascript@0.2.0';
+    config.scanners[0].source = '@groma/scanner-javascript@0.3.0';
     await writeFile(filename, JSON.stringify(config));
     const upgraded = await prepare(root);
     assert.notEqual(upgraded['scanner-key'], first['scanner-key']);
@@ -94,4 +94,16 @@ describe('workflow configuration', { concurrency: true }, () => {
     await assert.rejects(prepare(root, '/examples/', 'sepia'), error => error.code !== 0 && error.stderr.includes('theme'));
     assert.equal(await readFile(filename, 'utf8'), before);
   });
+  it('requires both comparison commits and rejects scan exclusions without changing config', async t => {
+    const root = await checkout(t);
+    const filename = path.join(root, 'groma/scanners.json');
+    const original = await readFile(filename, 'utf8');
+    await assert.rejects(prepare(root, '', 'auto', { GROMA_FROM: 'base' }), /both from and revision/);
+    await assert.rejects(prepare(root, '', 'auto', { GROMA_REVISION: 'head' }), /both from and revision/);
+    const commits = { GROMA_FROM: 'base', GROMA_REVISION: 'head' };
+    await assert.rejects(prepare(root, 'src/', 'auto', commits), /committed architecture/);
+    await prepare(root, '', 'auto', commits);
+    assert.equal(await readFile(filename, 'utf8'), original);
+  });
+
 });
