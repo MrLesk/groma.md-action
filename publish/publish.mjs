@@ -146,7 +146,8 @@ if (process.argv[1] === import.meta.filename) {
   const current = await context();
   if (current && process.argv[2] === 'store') await storePreview(current);
   else if (current && process.argv[2] === 'comment') {
-    const url = `${process.env.GROMA_PAGE_URL.replace(/\/$/, '')}/pr-${current.number}/architecture/${current.theme}/`;
+    const baseUrl = `${process.env.GROMA_PAGE_URL.replace(/\/$/, '')}/pr-${current.number}/architecture/${current.theme}/`;
+    const url = `${baseUrl}?revision=${current.summary.revision}&from=${current.summary.from}`;
     await updateComment(current.number, commentBody(current.summary, url, process.env.GITHUB_REPOSITORY));
     await appendFile(process.env.GITHUB_OUTPUT, `url=${url}\n`);
   }

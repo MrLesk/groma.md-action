@@ -1,11 +1,11 @@
 ---
 id: TASK-3
 title: Publish architecture comparisons on pull requests
-status: Done
+status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-09-26 16:25'
-updated_date: '2026-09-26 16:55'
+updated_date: '2026-09-26 16:56'
 labels: []
 dependencies: []
 documentation:
@@ -39,7 +39,7 @@ PR reviewers need one automatic comment that opens the architecture and owned-so
 <!-- AC:BEGIN -->
 - [x] #1 An initialized repository can export two committed revisions without scanning or installing repository-selected scanners; ordinary single-checkout builds retain their scan/export flow.
 - [x] #2 A documented complete public-repository workflow compares the PR merge base with its actual head, publishes a separate retained preview, and posts or updates one comment with component and relationship counts plus a direct comparison link.
-- [x] #3 PR updates refresh the same comment and preview without deleting other published previews; publication runs separately from read-only comparison building and does not execute PR-supplied scripts.
+- [ ] #3 PR updates refresh the same comment and preview without deleting other published previews; publication runs separately from read-only comparison building and does not execute PR-supplied scripts.
 - [x] #4 The workflow reports an empty comparison accurately, makes the compared commits visible, and never silently publishes a private repository or replaces an existing unrelated Pages site.
 - [x] #5 An implementation PR has passing automated checks, and a permanent demo PR shows a real code and architecture change through the documented workflow with a verified public comparison link.
 <!-- AC:END -->
@@ -52,6 +52,8 @@ Extend the existing build Action with explicit revision inputs and comparison su
 Before tests: comparison export must not execute repository-selected outline hooks (AC1/3); add a direct helper test that observes empty scanner selections during export and exact restoration on success/failure. Summary tests use changed and unchanged facts to catch inflated counts and empty-state mistakes (AC2/4). Publisher tests catch duplicate comments, lost unrelated previews, invalid artifact counts, and accepting a private or existing unrelated Pages site (AC3/4). Existing prepare tests cover input/config mutation; extend them for paired revisions and exclusion rejection. Merge-base behavior will be checked against a diverged Git history and through the real demo workflow, without a unit test that merely repeats Git.
 
 Add one integration check to the existing CI fixture after its scan/export: commit before/after source revisions, configure a local scanner module that leaves a marker if loaded, invoke the actual comparison Action, and assert the exported modified-component fact plus absence of the marker. The helper unit test cannot detect a future Groma release changing where scanner configuration is loaded; this closes that concrete AC1/3 gap at the published CLI boundary.
+
+Repeat-visit browser verification reproduced stale cached HTML at the stable preview path; refreshing a URL normalized to the old revision then left the map empty after replacement. Fix the published comment link by including Groma’s existing revision and from query parameters. This creates a fresh browser request for each compared commit pair while retaining the same PR directory. Verify the actual new comment URL and browser render; no new URL abstraction or test that merely restates string construction is needed.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -67,9 +69,3 @@ Final full-context complexity review passed; corrected README input/output wordi
 
 Groma 0.6.0 release run 36255479008 succeeded and npm availability was verified. Action runs 36256529351 and 36256532192 passed all tests plus real scanner and comparison exports. Demo run 36256894812 published the first preview; run 36257097053 published the next head. GitHub API confirms exactly one bot comment, ID 5848070088, updated to 92b8b5a. The unchanged public URL serves comparison.json for that head and merge base 2e48783, while main is newer. Browser verification of the public site confirmed hierarchy, changed descriptions, and source diff. No blocking review findings remain.
 <!-- SECTION:NOTES:END -->
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Delivered the comparison build Action, retained Pages publisher, complete public-PR workflow, and setup documentation. Comparisons use committed architecture and owned source without executing repository scanners. Verified 17 Node tests, ordinary and comparison CLI exports in CI, private/existing-site guards and preview preservation tests, a real public deployment and browser flow, and a second push updating the same comment and preview. Implementation PR: https://github.com/MrLesk/groma.md-action/pull/1. Permanent draft demo: https://github.com/MrLesk/groma.md-demo/pull/1. Cold, implementer, and full-context reviews passed.
-<!-- SECTION:FINAL_SUMMARY:END -->

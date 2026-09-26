@@ -14,11 +14,11 @@ For a **public repository with no existing GitHub Pages site**:
 
 The workflow needs no extra account or secret. It uses the repository's `GITHUB_TOKEN`; organization policies must allow its declared write permissions. Fork contributions use the same flow.
 
-The PR gets one comment showing added, modified, and removed components and relationships. Every push updates that comment and its comparison URL. A PR with no architecture or owned-source changes gets an explicit empty result. The comment links to the exact compared commits.
+The PR gets one comment showing added, modified, and removed components and relationships. Every push updates that comment and its comparison link. A PR with no architecture or owned-source changes gets an explicit empty result. The comment links to the exact compared commits.
 
 The comparison starts at the PR's **merge base** (the last common commit with the target branch) and ends at its actual head commit. This shows what the PR introduces, including when the target branch has advanced. Groma owns all change detection; this Action only counts the change facts it exports.
 
-Previews live under `/pr-<number>/architecture/auto/`. They stay on the `groma-previews` branch and the Pages site after PR closure. Publishing another PR preserves earlier previews. There is no automatic cleanup or artifact-expiration dependency for published links.
+Previews live under `/pr-<number>/architecture/auto/`. The comment link includes the compared commit hashes so repeat visits open fresh data. They stay on the `groma-previews` branch and the Pages site after PR closure. Publishing another PR preserves earlier previews. There is no automatic cleanup or artifact-expiration dependency for published links.
 
 ### Existing Pages sites
 
