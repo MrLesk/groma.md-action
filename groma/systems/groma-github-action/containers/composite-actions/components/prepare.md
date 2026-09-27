@@ -12,4 +12,4 @@ groma:
 description: Validates export inputs and prepares the initialized project
 ---
 
-The root action.yml invokes prepare.mjs before scanning. It validates the theme, finds the Groma configuration, applies additional scan exclusions, and returns the output directory and scanner cache key to the workflow.
+The root action.yml invokes prepare.mjs before export. It requires both revision inputs for a comparison and rejects scan exclusions in that mode. It validates the theme and initialized Groma configuration, then returns the website directory, map directory, configuration path, and scanner cache key to the workflow.
