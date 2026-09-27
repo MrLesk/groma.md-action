@@ -29,7 +29,7 @@ Keep your publisher. Run the build Action with `from` and `revision` (check out 
 For a repository without a Pages site, set the Pages source to **GitHub Actions** and copy [`examples/pages.yml`](examples/pages.yml): it scans the current checkout and publishes its map. To add the map to a site you already build:
 
 ```yaml
-- uses: MrLesk/groma.md-action@main
+- uses: MrLesk/groma.md-action@v1
   with:
     output: site # your built site
     theme: blueprint
@@ -53,4 +53,4 @@ The Action scans with the scanners committed in `scanners.json`. It doesn't init
 | `directory` | The map, at `<output>/architecture/<theme>/` |
 | `summary` | Comparison JSON with the change counts; empty without `from` |
 
-The Action installs Groma 0.6.0. There is no release tag yet: use `@main` or pin a commit.
+The Action installs Groma 0.6.0. `@v1` always points to the latest 1.x release.
