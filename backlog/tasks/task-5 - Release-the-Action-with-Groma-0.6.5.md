@@ -1,11 +1,11 @@
 ---
 id: TASK-5
 title: Release the Action with Groma 0.6.5
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-05 11:00'
-updated_date: '2026-10-05 11:35'
+updated_date: '2026-10-05 11:39'
 labels: []
 dependencies: []
 modified_files:
@@ -24,8 +24,8 @@ Alex requested adoption of the Groma hotfix in the Action and its examples. The 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 The Action installs published Groma 0.6.5 and the README states the same version.
-- [ ] #2 Local checks and the Check workflow pass on the exact Action release commit, including current-map and committed-comparison exports.
-- [ ] #3 Action v1.0.2 is published and both example workflows use the v1 tag pointing to that tested release.
+- [x] #2 Local checks and the Check workflow pass on the exact Action release commit, including current-map and committed-comparison exports.
+- [x] #3 Action v1.0.2 is published and both example workflows use the v1 tag pointing to that tested release.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -37,7 +37,19 @@ Alex requested adoption of the Groma hotfix in the Action and its examples. The 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Groma Release run 37300984928 passed. All five platform packages and the wrapper report version 0.6.5 on npm, and the GitHub release contains five binaries plus SHA256SUMS. Updated only the CLI pin and README version; both example workflows already use @v1. No test was added for version text: existing checks and the real Check workflow verify current-map and committed-comparison exports.
+Groma Release run 37300984928 passed. All five platform packages and the wrapper report 0.6.5 on npm; the GitHub release has five binaries and SHA256SUMS. A fresh isolated npm install reports 0.6.5 and its macOS binary matches the GitHub checksum.
 
-npm run check passed all 17 tests under Node 24.11.1; log /private/tmp/groma-action-1.0.2-check.log. git diff --check passed. The implementer reviewed the complete two-line change: the install step owns the exact published CLI version, and README describes that same version. Build and publication behavior, scanner configuration and examples are unchanged. The Check workflow on the release commit remains the final verification before publishing v1.0.2.
+The install step in action.yml owns the exact CLI version, and README documents the same version. Both now use 0.6.5. Both example workflows already use @v1, so no example files changed. Build and publication behavior, scanner configuration, OKF metadata and C4 semantics are unchanged.
+
+npm run check passed all 17 tests under Node 24.11.1; log /private/tmp/groma-action-1.0.2-check.log. git diff --check passed. Check run https://github.com/MrLesk/groma.md-action/actions/runs/37303937206 passed on exact release commit 766bf95a1c51ff50f113aabaa843e30d6aa3758a, including current-map and committed-comparison exports and their existing verifiers. No test was added for version text; existing checks prove the supported results.
+
+The implementer's specification and quality reviews pass. The change is a CLI pin and matching documentation, with clear ownership in the install step. The supported export flows pass without added code, dependencies or tests.
+
+Action v1.0.2 is published at https://github.com/MrLesk/groma.md-action/releases/tag/v1.0.2. Both v1.0.2 and v1 resolve to 766bf95a1c51ff50f113aabaa843e30d6aa3758a. The major tag update used a lease against the previous tag to protect concurrent changes. The public Marketplace listing shows v1.0.2 as latest; no additional browser publication step was needed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Released Action v1.0.2 with Groma 0.6.5 and moved @v1 to the exact tested release commit. All 17 local tests and the GitHub current-map and committed-comparison checks pass. Marketplace shows v1.0.2 as latest. Both examples receive the hotfix through their existing @v1 references.
+<!-- SECTION:FINAL_SUMMARY:END -->
