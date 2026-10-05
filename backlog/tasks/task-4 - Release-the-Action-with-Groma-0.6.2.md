@@ -1,11 +1,11 @@
 ---
 id: TASK-4
 title: Release the Action with Groma 0.6.2
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-05 05:00'
-updated_date: '2026-10-05 05:22'
+updated_date: '2026-10-05 05:30'
 labels: []
 dependencies: []
 modified_files:
@@ -22,9 +22,9 @@ The Groma 0.6.2 release requires the public Action to use the new CLI version. T
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The Action installs Groma 0.6.2 and the README states the same version.
-- [ ] #2 Local checks and the Check workflow pass on the exact Action release commit, including current-map and committed-comparison exports.
-- [ ] #3 Action v1.0.1 is published and the v1 pointer targets that tested release.
+- [x] #1 The Action installs Groma 0.6.2 and the README states the same version.
+- [x] #2 Local checks and the Check workflow pass on the exact Action release commit, including current-map and committed-comparison exports.
+- [x] #3 Action v1.0.1 is published and the v1 pointer targets that tested release.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -36,7 +36,17 @@ The Groma 0.6.2 release requires the public Action to use the new CLI version. T
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Groma release workflow 37265828827 passed on all five hosts. All 24 expected exact npm versions are visible, and npm view groma.md@0.6.2 version returns 0.6.2. Updated only the installation pin and its README statement. Existing examples already use @v1.
+The root composite Action installs Groma 0.6.2, and the README names that exact version. Existing examples already use @v1. The change affects two version strings and leaves build, export and comparison behavior unchanged. The CLI installation step remains the single owner of the version pin.
 
-Local npm run check passed all 17 tests on Node 24.11.1; git diff --check passed. Specification and quality review: the root composite Action is the only owner of CLI installation, and the README describes that pin. The diff changes two version strings and no workflow behavior. Existing integration CI covers current-map export and committed comparison, including refusal to execute a PR scanner. No new tests are needed for a version string. The exact commit CI and release publication remain pending.
+Groma release workflow 37265828827 passed on all five build hosts. All 24 expected exact npm versions and all six CLI tarballs are available. An isolated macOS npm install reports 0.6.2 through both its binary and Node wrapper, and the binary matches the GitHub release checksum. Fresh scanner installation and second-checkout restore passed on the existing acceptance projects.
+
+Local npm run check passed all 17 tests on Node 24.11.1; git diff --check passed. Check workflow 37267515544 passed on exact commit 8ba8ddb125dd56b73b5d59b53a66f537cffc8aac, including current-map export and committed comparison without executing a PR scanner. Its first attempt encountered a still-processing Linux npm tarball; the unchanged commit passed after that canonical tarball became available. No test, retry policy or runtime behavior was changed.
+
+Specification and quality reviews pass. The version pin and its documentation agree, existing integration tests prove the supported flows, and no new test for version text is needed. Action v1.0.1 is published at https://github.com/MrLesk/groma.md-action/releases/tag/v1.0.1. Both v1.0.1 and v1 resolve to 8ba8ddb125dd56b73b5d59b53a66f537cffc8aac. The public Marketplace page https://github.com/marketplace/actions/groma-md-architecture-map displays v1.0.1 as Latest, so no additional browser publication step is required. Release notes explain Groma 0.6.2 relationship storage and the effect on older committed architecture.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Released Action v1.0.1 with Groma 0.6.2 and moved @v1 to the exact tested commit. All 17 local tests and the current-map and committed-comparison integration checks pass. GitHub Marketplace shows v1.0.1 as latest. Release notes explain the relationship format change, including comparisons of older commits.
+<!-- SECTION:FINAL_SUMMARY:END -->
