@@ -1,11 +1,11 @@
 ---
 id: TASK-6
 title: Control the reader and checkout used for PR comparisons
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-06 10:35'
-updated_date: '2026-10-06 10:39'
+updated_date: '2026-10-06 10:41'
 labels: []
 dependencies: []
 references:
@@ -28,10 +28,10 @@ The Action follows a moving v1 tag but hardcodes its Groma CLI version. Updating
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A workflow can select a Groma CLI version independently of the Action reference; omitted input retains the current default.
-- [ ] #2 The PR and Pages examples pin their reader version and explain that both revisions must use a readable architecture format.
-- [ ] #3 The Action checks verify a default-version build and an explicit-version comparison with the existing source and scanner-isolation assertions.
-- [ ] #4 The fork PR workflow keeps the trusted base checked out and fetches the PR commit only as comparison data, with checkout v7 protections enabled.
+- [x] #1 A workflow can select a Groma CLI version independently of the Action reference; omitted input retains the current default.
+- [x] #2 The PR and Pages examples pin their reader version and explain that both revisions must use a readable architecture format.
+- [x] #3 The Action checks verify a default-version build and an explicit-version comparison with the existing source and scanner-isolation assertions.
+- [x] #4 The fork PR workflow keeps the trusted base checked out and fetches the PR commit only as comparison data, with checkout v7 protections enabled.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -49,4 +49,12 @@ Reproduced additional failure: checkout v7 refuses PR #113 head under pull_reque
 
 <!-- SECTION:NOTES:BEGIN -->
 Implementation uses the existing install step and scanner cache. The selected version crosses the YAML-to-shell boundary through an environment variable and stays one quoted npm package argument. No model parsing or fallback was added. Own specification/quality review found no blocking issue; all 17 Node tests pass. GitHub integration will exercise both versions before finalization.
+
+Final own specification and quality review: workflow-supplied versions remain one quoted npm argument, existing cache keys use the actual installed version, and no PR scripts or scanner hooks run in comparisons. The reusable example checks out only the trusted base and fetches the head as Git data. All 17 Node tests pass. GitHub Check runs 37451313962 and 37451319745 pass on b77da940, verifying both installed versions and exported head source diffs while the checkout stays at the base. No core, OKF, or C4 change is needed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added explicit Groma CLI selection and pinned examples so Action updates cannot silently replace a chosen reader. The PR example uses checkout v7 on the trusted base and fetches the requested head only for Git snapshot export. Existing integration coverage proves the selected reader, source diffs, and scanner isolation with the base checked out; all 17 unit checks and both CI runs pass. Both commits must still be readable by the selected Groma release.
+<!-- SECTION:FINAL_SUMMARY:END -->
