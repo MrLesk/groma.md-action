@@ -1,11 +1,11 @@
 ---
 id: TASK-6
 title: Control automatic and manual PR architecture comparisons
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-06 10:35'
-updated_date: '2026-10-06 10:44'
+updated_date: '2026-10-06 10:47'
 labels: []
 dependencies: []
 references:
@@ -36,7 +36,7 @@ The Action follows a moving v1 tag but hardcodes its Groma CLI version. Updating
 - [x] #2 The PR and Pages examples pin their reader version and explain that both revisions must use a readable architecture format.
 - [x] #3 The Action checks verify a default-version build and an explicit-version comparison with the existing source and scanner-isolation assertions.
 - [x] #4 The fork PR workflow keeps the trusted base checked out and fetches the PR commit only as comparison data, with checkout v7 protections enabled.
-- [ ] #5 Fork PRs do not export automatically; a maintainer can select a PR with Run workflow and publish the resulting comparison.
+- [x] #5 Fork PRs do not export automatically; a maintainer can select a PR with Run workflow and publish the resulting comparison.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -58,10 +58,12 @@ User approved manual comparisons for external PRs after review, like manually st
 Implementation uses the existing install step and scanner cache. The selected version crosses the YAML-to-shell boundary through an environment variable and stays one quoted npm package argument. No model parsing or fallback was added. Own specification/quality review found no blocking issue; all 17 Node tests pass. GitHub integration will exercise both versions before finalization.
 
 Final own specification and quality review: workflow-supplied versions remain one quoted npm argument, existing cache keys use the actual installed version, and no PR scripts or scanner hooks run in comparisons. The reusable example checks out only the trusted base and fetches the head as Git data. All 17 Node tests pass. GitHub Check runs 37451313962 and 37451319745 pass on b77da940, verifying both installed versions and exported head source diffs while the checkout stays at the base. No core, OKF, or C4 change is needed.
+
+User explicitly chose manual maintainer runs for fork PRs. Final supported flow: same-repository events or a workflow_dispatch PR number enter selection; GitHub supplies exact base/head; base is checked out; the requested commits export; publisher receives the selected PR/base and refuses stale head/base. Final own specification and quality review passed. All 20 Node tests and Check runs 37451938771/37451943638 pass on 7093f81. The unchanged historic demo remains pinned to its original Action, so no caller change was needed there.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Added explicit Groma CLI selection and pinned examples so Action updates cannot silently replace a chosen reader. The PR example uses checkout v7 on the trusted base and fetches the requested head only for Git snapshot export. Existing integration coverage proves the selected reader, source diffs, and scanner isolation with the base checked out; all 17 unit checks and both CI runs pass. Both commits must still be readable by the selected Groma release.
+Same-repository PRs compare automatically; external forks require a maintainer to use Run workflow with the reviewed PR number. The reusable example keeps the trusted base checked out and the publisher verifies that the selected head and base are still current. Explicit groma-version pins the reader independently of Action updates. All 20 Node tests and integration CI pass, including manual selection, stale-commit rejection, different checked-out/exported revisions, and scanner isolation.
 <!-- SECTION:FINAL_SUMMARY:END -->
