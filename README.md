@@ -20,7 +20,7 @@ Keep your publisher. Run the build Action with `from` and `revision` (check out 
 
 ### What runs on a PR
 
-- `compare` is read-only. It exports the committed architecture and source of both commits. It doesn't scan, install dependencies or run PR scripts.
+- `compare` is read-only. It keeps the trusted base checked out and fetches the PR commit as data. Groma exports both committed snapshots without scanning, installing application dependencies or running PR scripts. Keep checkout's fork protection enabled.
 - `publish` deploys the preview to Pages and updates the comment. Keep PR-supplied commands out of this job.
 - Previews are public and stay at `/pr-<number>/architecture/auto/` after the PR closes. Private repositories aren't supported.
 

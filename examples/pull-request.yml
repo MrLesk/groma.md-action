@@ -13,9 +13,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Find the PR comparison base
@@ -23,7 +23,10 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-        run: echo "from=$(git merge-base "$BASE" "$HEAD")" >> "$GITHUB_OUTPUT"
+        # Keep the trusted base checked out; export reads the PR commit from Git.
+        run: |
+          git fetch --no-tags origin "$HEAD"
+          echo "from=$(git merge-base "$BASE" "$HEAD")" >> "$GITHUB_OUTPUT"
       - uses: MrLesk/groma.md-action@v1
         id: map
         with:
