@@ -12,7 +12,7 @@ For public repositories without an existing GitHub Pages site:
 2. In **Settings → Pages**, set the source to **GitHub Actions**.
 3. Copy [`examples/pull-request.yml`](examples/pull-request.yml) to `.github/workflows/groma-pr.yml` on your default branch.
 
-Every PR then gets the comment, updated on each push. The map compares the PR with its merge base, so it shows what the PR introduces. No account or secret needed: the workflow uses `GITHUB_TOKEN`. Fork PRs work too.
+PRs from the same repository get the comment, updated on each push. The map compares the PR with its merge base, so it shows what the PR introduces. No account or secret needed: the workflow uses `GITHUB_TOKEN`. Fork PRs wait for a maintainer: after review, open **Actions → Groma PR comparison → Run workflow** on the default branch and enter the PR number. This approves one comparison; later fork pushes do not trigger another export.
 
 ### Existing Pages sites
 
@@ -21,7 +21,7 @@ Keep your publisher. Run the build Action with `from` and `revision` (check out 
 ### What runs on a PR
 
 - `compare` is read-only. It keeps the trusted base checked out and fetches the PR commit as data. Groma exports both committed snapshots without scanning, installing application dependencies or running PR scripts. Keep checkout's fork protection enabled.
-- `publish` deploys the preview to Pages and updates the comment. Keep PR-supplied commands out of this job.
+- `publish` receives the selected PR number and exact base commit, deploys the preview to Pages and updates the comment. It skips publication if the PR head or base has changed. Keep PR-supplied commands out of this job.
 - Previews are public and stay at `/pr-<number>/architecture/auto/` after the PR closes. Private repositories aren't supported.
 
 ## Publish a current map

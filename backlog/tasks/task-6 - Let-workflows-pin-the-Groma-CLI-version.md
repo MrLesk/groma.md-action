@@ -1,11 +1,11 @@
 ---
 id: TASK-6
-title: Control the reader and checkout used for PR comparisons
-status: Done
+title: Control automatic and manual PR architecture comparisons
+status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-06 10:35'
-updated_date: '2026-10-06 10:41'
+updated_date: '2026-10-06 10:44'
 labels: []
 dependencies: []
 references:
@@ -16,6 +16,10 @@ modified_files:
   - examples/pull-request.yml
   - examples/pages.yml
   - .github/workflows/check.yml
+  - publish/action.yml
+  - publish/publish.mjs
+  - test/publish.test.mjs
+  - .github/workflows/groma-demo.yml
 type: bug
 ordinal: 6000
 ---
@@ -32,6 +36,7 @@ The Action follows a moving v1 tag but hardcodes its Groma CLI version. Updating
 - [x] #2 The PR and Pages examples pin their reader version and explain that both revisions must use a readable architecture format.
 - [x] #3 The Action checks verify a default-version build and an explicit-version comparison with the existing source and scanner-isolation assertions.
 - [x] #4 The fork PR workflow keeps the trusted base checked out and fetches the PR commit only as comparison data, with checkout v7 protections enabled.
+- [ ] #5 Fork PRs do not export automatically; a maintainer can select a PR with Run workflow and publish the resulting comparison.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -43,6 +48,8 @@ The Action follows a moving v1 tag but hardcodes its Groma CLI version. Updating
 4. Run npm run check, review the small configuration change, and verify the GitHub Check workflow. This is delivery configuration: OKF Markdown and C4 semantics remain owned by Groma, with no new architecture metadata or compatibility reader.
 
 Reproduced additional failure: checkout v7 refuses PR #113 head under pull_request_target (run 37451040362). Change the reusable PR example to check out its base commit and fetch the requested head without checking it out. The exporter already reads both snapshots from Git; it needs no core change. Extend the existing integration setup to return to the before commit before export. Wrong result: comparison accidentally reads the working checkout instead of its requested head. The existing source-diff assertion must still observe the after commit. This stays within the requested permanent fix for other repositories.
+
+User approved manual comparisons for external PRs after review, like manually starting CI. Add a workflow_dispatch PR-number input and restrict the automatic event to same-repository heads. Resolve the selected PR through GitHub before checkout. Pass its number and exact base explicitly to the publisher so both event types use the same publication path and existing stale-build checks. Extend publish tests with a real temporary comparison artifact: manual identity must target the selected PR and reject a changed head or base. Existing tests do not exercise publisher context, which currently requires pull_request_target. No separate approval persistence or new export parser.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
