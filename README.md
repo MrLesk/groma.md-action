@@ -57,4 +57,6 @@ The Action scans with the scanners committed in `scanners.json`. It doesn't init
 
 The default is Groma 0.6.5. `@v1` follows Action releases, which can change that default. Set `groma-version` to an exact release to keep reader upgrades explicit.
 
+Installation and version verification are retried up to three times, with a 10-second delay between failed attempts. If all attempts fail, the Action stops and uploads its npm logs as a `groma-npm-logs-*` artifact, retained for seven days. Each invocation uses a separate log directory and artifact name.
+
 Both comparison commits must contain architecture that the selected Groma version can read. After a format change, update an older PR from its base branch so its merge base and head use the current format. Choosing a version does not convert committed architecture.

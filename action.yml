@@ -46,9 +46,15 @@ runs:
       shell: bash
       env:
         GROMA_VERSION: ${{ inputs.groma-version }}
-      run: |
-        npm install --global "groma.md@$GROMA_VERSION"
-        echo "version=$(groma --version)" >> "$GITHUB_OUTPUT"
+      run: bash "$GITHUB_ACTION_PATH/install.sh"
+
+    - name: Upload npm logs on installation failure
+      if: failure() && steps.groma.outcome == 'failure'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.groma.outputs.logs-name }}
+        path: ${{ steps.groma.outputs.logs-directory }}
+        retention-days: 7
 
     - name: Prepare project
       id: prepare
