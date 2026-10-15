@@ -90,3 +90,29 @@ jobs:
         env:
           EXPORTED_SITE: ${{ steps.comparison.outputs.directory }}
         run: node .action/test/verify-export.mjs "$EXPORTED_SITE" comparison
+
+      - name: Exercise failed installation
+        id: failed-install
+        continue-on-error: true
+        uses: ./.action
+        with:
+          groma-version: '0.0.0-install-failure-test'
+          output: failed-install-site
+
+      - name: Verify failed installation stopped export
+        env:
+          INSTALL_OUTCOME: ${{ steps.failed-install.outcome }}
+        run: |
+          test "$INSTALL_OUTCOME" = 'failure'
+          test ! -e failed-install-site
+
+      - name: Download failed installation logs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: groma-npm-logs-*
+          merge-multiple: true
+          path: npm-install-logs
+
+      - name: Verify npm debug logs were uploaded
+        shell: bash
+        run: compgen -G 'npm-install-logs/*-debug-*.log' >/dev/null
