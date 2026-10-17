@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-17 05:12'
-updated_date: '2026-10-17 05:27'
+updated_date: '2026-10-17 05:29'
 labels: []
 dependencies: []
 references:
@@ -60,4 +60,6 @@ Draft PRs run unit checks on Windows, Linux and macOS. The existing real npm/act
 Implementation uses config.json and 0.7.0 directly. The CI working copy disables automatic background updates, then scan.mjs restores missing plugins, updates each configured npm scanner and completes one check/scan/export sequence. Git/local sources stay declared and committed comparisons keep the empty temporary root. Local checks pass28 Node tests; preparation preserves scanner settings/workSources and literal exclusions. Public npm smoke is held until Groma0.7.0 exists. Source/quality review finds clear ownership in prepare, scan and comparison scripts; no compatibility adapter or new public Action input was added.
 
 Final local unit/source checks pass:28 Node tests, no skips; node --check prepare.mjs and scan.mjs; git diff --check. Existing comparison tests verify no project plugin configuration in the temporary export root on success and failure. Required public Groma0.7 installation smoke stays pending, so this task remains In Progress and its PR will be draft. Final candidate integration and real action flow will be qualified before release coordination.
+
+The first Windows run exposed an existing assertion that compared Git forward-slash paths with Windows backslash paths. Normalized the returned Git directory with path.resolve; the test still checks the exact repository directory and both export success/failure paths. Linux and macOS passed before this correction. No assertion or workflow check was removed.
 <!-- SECTION:NOTES:END -->
