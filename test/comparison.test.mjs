@@ -32,7 +32,7 @@ for (const fail of [false, true]) {
     t.after(() => rm(root, { recursive: true, force: true }));
     await run('git', ['init', '--quiet', root]);
     await mkdir(path.join(root, 'groma'));
-    const configFile = path.join(root, 'groma/plugins.json');
+    const configFile = path.join(root, 'groma/config.json');
     const original = '{ "scanners": [{"source":"./local-scanner"}], "workSources": [{"source":"./local-work-source"}] }\n';
     await writeFile(configFile, original);
     let exportRoot;
