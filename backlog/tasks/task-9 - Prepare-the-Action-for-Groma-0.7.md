@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-17 05:12'
-updated_date: '2026-10-17 05:29'
+updated_date: '2026-10-17 05:50'
 labels: []
 dependencies: []
 references:
@@ -36,9 +36,9 @@ Groma 0.7 replaces scanner configuration and management commands. The Action mus
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Single-checkout publication uses config.json and Groma 0.7 plugin commands while preserving project scanner settings and work-source choices.
-- [ ] #2 A publication finishes its chosen scanner updates before scanning and exporting, with no detached update racing the export.
-- [ ] #3 Committed comparisons read committed architecture and source without installing or executing project plugins.
+- [x] #1 Single-checkout publication uses config.json and Groma 0.7 plugin commands while preserving project scanner settings and work-source choices.
+- [x] #2 A publication finishes its chosen scanner updates before scanning and exporting, with no detached update racing the export.
+- [x] #3 Committed comparisons read committed architecture and source without installing or executing project plugins.
 - [ ] #4 The default CLI, examples and checks target Groma 0.7; the prepared PR stays unmerged until the CLI is publicly installable.
 <!-- AC:END -->
 
@@ -62,4 +62,6 @@ Implementation uses config.json and 0.7.0 directly. The CI working copy disables
 Final local unit/source checks pass:28 Node tests, no skips; node --check prepare.mjs and scan.mjs; git diff --check. Existing comparison tests verify no project plugin configuration in the temporary export root on success and failure. Required public Groma0.7 installation smoke stays pending, so this task remains In Progress and its PR will be draft. Final candidate integration and real action flow will be qualified before release coordination.
 
 The first Windows run exposed an existing assertion that compared Git forward-slash paths with Windows backslash paths. Normalized the returned Git directory with path.resolve; the test still checks the exact repository directory and both export success/failure paths. Linux and macOS passed before this correction. No assertion or workflow check was removed.
+
+Current source e31b999 passes Windows, Linux and macOS CI. Candidate end-to-end qualification with the actual standalone Groma0.7 binary passes fresh and warm-cache prepare/install/update/scan/export. Export includes only selected source and source bytes stay unchanged. Committed comparison from the base checkout reports the expected code change without executing a deliberately failing local scanner or changing project config. Repeated on final combined candidate e7149d27 (/tmp/groma-action-task9-e2e.log and results.json). Implementer specification/quality review confirms prepare owns CI configuration, scan owns the settled plugin/scan/export sequence and comparison remains independent. Public npm0.7 smoke and release-time merge remain pending; PR8 stays draft.
 <!-- SECTION:NOTES:END -->
