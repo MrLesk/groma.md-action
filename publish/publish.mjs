@@ -115,13 +115,16 @@ export function publicationGitEnvironment(inherited) {
     [`GIT_CONFIG_VALUE_${count}`]: `AUTHORIZATION: basic ${credential}` };
 }
 
-async function storeSite(context) {
+export async function storeSite(context) {
   const site = await mkdtemp(path.join(process.env.RUNNER_TEMP, 'groma-pages-'));
   const env = publicationGitEnvironment(process.env);
   const git = async (...args) => (await run('git', args, { cwd: site, env })).stdout.trim();
   const remote = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}.git`;
   await git('init', '--quiet', '-b', branch);
   await git('remote', 'add', 'origin', remote);
+  if (await git('remote', 'get-url', '--push', 'origin') !== await git('remote', 'get-url', 'origin')) {
+    throw new Error('Pages publication requires the same Git fetch and push URL. Remove the separate push URL rewrite.');
+  }
   const exists = Boolean(await git('ls-remote', '--heads', 'origin', branch));
   if (exists) {
     await git('fetch', '--depth=1', 'origin', branch);

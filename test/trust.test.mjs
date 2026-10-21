@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import tls from 'node:tls';
 import { it } from 'node:test';
-import { publicationGitEnvironment } from '../publish/publish.mjs';
+import { publicationGitEnvironment, storeSite } from '../publish/publish.mjs';
 import { blockedSPKI, filterAuthorities, npmAuthorities, trustSettings, prepareTrust, prepareWorkflowTrust, exportSettings,
   installArguments, installGroma, runNpm } from '../prepare-trust.mjs';
 
@@ -473,6 +473,59 @@ it('filters explicit Git CA directories without widening trust through hash gaps
   assert.deepEqual(certificates(await readFile(path.join(settings.GIT_SSL_CAPATH, '1234abcd.0'), 'utf8')).map(key), [key(privateCA)]);
   assert.throws(() => prepareTrust({ env: { GIT_SSL_CAINFO: '' }, directory: output,
     bundled: [privateCA], getCertificates: () => [], npmInputs: null }), /Git CA file is empty/);
+});
+
+it('Pages publication rejects a separate native push rewrite before either remote receives credentials', async t => {
+  const root = await temporary(t), config = path.join(root, 'gitconfig'), ca = path.join(root, 'raw-ca.pem');
+  await writeFile(ca, [...incidents.map(c => c.pem), privateCA].join('\n'));
+  const servers = [];
+  for (const filename of ['registry-server.pem', 'incident-server-emudhra.pem']) {
+    const peer = { requests: 0, authenticated: 0 };
+    peer.server = https.createServer({ key: await readFile(path.join(fixture, 'registry-server-key.pem')),
+      cert: await readFile(path.join(fixture, filename)) }, (request, response) => {
+      peer.requests++; if (request.headers.authorization) peer.authenticated++;
+      response.writeHead(404); response.end('fixture');
+    });
+    await new Promise(resolve => peer.server.listen(0, '127.0.0.1', resolve));
+    peer.origin = `https://localhost:${peer.server.address().port}`; servers.push(peer);
+  }
+  const original = { ...process.env }, [origin, push] = servers;
+  const clean = Object.fromEntries(Object.entries(original).filter(([name]) =>
+    !/^(?:git_config(?:_.+)?|git_ssl_.*|git_proxy_ssl_cainfo|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
+  const env = { ...clean, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config, RUNNER_TEMP: root,
+    GITHUB_SERVER_URL: origin.origin, GITHUB_REPOSITORY: 'owner/fixture', GH_TOKEN: 'fixture-only',
+    NO_PROXY: '127.0.0.1,localhost', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' };
+  const git = args => promisify(execFile)('git', args, { cwd: root, env, timeout: 10000 });
+  const base = `[http]\n sslVerify = true\n${process.platform === 'win32' ? ' sslBackend = openssl\n' : ''}`
+    + `[http "${origin.origin}/"]\n sslCAInfo = ${JSON.stringify(ca)}\n`
+    + `[http "${push.origin}/"]\n sslCAInfo = ${JSON.stringify(ca)}\n extraHeader = Authorization: Bearer fixture-only\n`;
+  try {
+    await writeFile(config, base + `[url "${push.origin}/"]\n pushInsteadOf = ${origin.origin}/\n`);
+    await git(['init', '--quiet']);
+    await git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '--allow-empty', '-m', 'fixture']);
+    await git(['remote', 'add', 'origin', `${origin.origin}/owner/fixture.git`]);
+    const settings = prepareTrust({ env, npmInputs: null });
+    const raw = await promisify(execFile)('git', ['push', 'origin', 'HEAD'], { cwd: root,
+      env: { ...env, ...settings }, timeout: 10000 }).then(() => null, error => error);
+    assert.ok(Number.isInteger(raw?.code) && !raw.killed, raw?.message);
+    assert.match(raw.stderr, /404|not found/i);
+    assert.ok(push.requests > 0 && push.authenticated > 0, 'The unguarded strict-TLS push must prove the destination bypass.');
+    push.requests = 0; push.authenticated = 0;
+    for (const key of Object.keys(process.env)) if (!(key in env)) delete process.env[key];
+    Object.assign(process.env, env, settings);
+    await assert.rejects(storeSite({}), /same Git fetch and push URL/);
+    assert.equal(origin.requests + push.requests, 0);
+    assert.equal(origin.authenticated + push.authenticated, 0);
+    // Matching native fetch/push URLs still reach the selected private HTTPS origin.
+    await writeFile(config, base);
+    await assert.rejects(storeSite({}), /404|not found/i);
+    assert.ok(origin.requests > 0 && origin.authenticated > 0);
+    assert.equal(push.requests, 0);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
+    Object.assign(process.env, original);
+    for (const peer of servers) { peer.server.closeAllConnections(); await new Promise(resolve => peer.server.close(resolve)); }
+  }
 });
 
 it('keeps CA-directory-only Git trust separate from OS and Node authorities', async t => {
