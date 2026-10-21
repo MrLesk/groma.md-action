@@ -343,7 +343,7 @@ it('keeps native Git private CA selection for GitHub and unrelated remotes witho
         GITHUB_REPOSITORY: 'owner/fixture', ...(mode === 'explicit' ? { GIT_SSL_CAINFO: ca } : {}) };
       const directory = path.join(root, mode);
       const { mkdir } = await import('node:fs/promises'); await mkdir(directory);
-      const settings = prepareTrust({ env, directory, bundled: [tls.rootCertificates[0]], getCertificates: () => [], npmInputs: null });
+      const settings = prepareTrust({ env, directory, bundled: [tls.rootCertificates[0]], npmInputs: null });
       assert.equal(Object.hasOwn(settings, 'GIT_SSL_CAINFO'), mode === 'explicit');
       const child = { ...env, ...settings };
       if (mode === 'unrelated') {
@@ -366,6 +366,46 @@ it('keeps native Git private CA selection for GitHub and unrelated remotes witho
       assert.match(result.stderr, /404|not found/i);
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   }
+});
+
+it('does not turn Node-only extra CAs into default Git authorities', async t => {
+  const root = await temporary(t), config = path.join(root, 'gitconfig');
+  const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+    !/^(?:git_config(?:_.+)?|git_ssl_(?:no_verify|cainfo|capath)|git_proxy_ssl_cainfo|https?_proxy|all_proxy|no_proxy|ssl_cert_(?:file|dir)|curl_ca_bundle|node_extra_ca_certs)$/i.test(name)));
+  Object.assign(clean, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config, NO_PROXY: 'localhost,127.0.0.1',
+    no_proxy: 'localhost,127.0.0.1', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' });
+  let requests = 0, authorization;
+  const server = https.createServer({ key: await readFile(path.join(fixture, 'registry-server-key.pem')),
+    cert: await readFile(path.join(fixture, 'registry-server.pem')) }, (request, response) => {
+    requests++; authorization = request.headers.authorization;
+    response.writeHead(404); response.end('fixture repository not found');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const origin = `https://localhost:${server.address().port}`, remote = `${origin}/owner/fixture.git`;
+    await writeFile(config, `[http "${remote}"]\n extraHeader=Authorization: Bearer node-extra-fixture\n`);
+    const env = { ...clean, NODE_EXTRA_CA_CERTS: path.join(fixture, 'registry-ca.pem'),
+      GITHUB_SERVER_URL: origin, GITHUB_REPOSITORY: 'owner/fixture' };
+    const platform = process.platform === 'win32' ? ['-c', 'http.sslBackend=schannel',
+      '-c', 'http.schannelUseSSLCAInfo=true', '-c', 'http.schannelCheckRevoke=false'] : [];
+    const execute = child => promisify(execFile)('git', [...platform, 'ls-remote', remote],
+      { env: child, cwd: root, timeout: 10000 }).then(() => null, error => error);
+    const before = await execute(env);
+    assert.ok(Number.isInteger(before?.code) && !before.killed, before?.message);
+    assert.match(before.stderr, /certificate|SSL|issuer|trust|schannel/i);
+    assert.equal(requests, 0, before.stderr);
+    const settings = prepareTrust({ env, directory: root, npmInputs: null });
+    assert.ok(certificates(await readFile(settings.SSL_CERT_FILE, 'utf8')).some(pem => key(pem) === key(privateCA)),
+      'The extra CA remains available to Node under its own policy.');
+    const result = await execute({ ...env, ...settings });
+    assert.ok(Number.isInteger(result?.code) && !result.killed, result?.message);
+    assert.equal(requests, 0, `Git must not gain a Node-only CA; proxyAuth=${authorization !== undefined}: ${result.stderr}`);
+    assert.equal(authorization, undefined);
+    assert.match(result.stderr, /certificate|SSL|issuer|trust|schannel/i);
+    const selected = (await promisify(execFile)('git', ['config', '--get-urlmatch', 'http.sslCAInfo', remote],
+      { env: { ...env, ...settings }, cwd: root })).stdout.trim();
+    assert.ok(!certificates(await readFile(selected, 'utf8')).some(pem => key(pem) === key(privateCA)));
+  } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 });
 
 it('filters explicit Git CA directories without widening trust through hash gaps and rejects empty selected files', async t => {

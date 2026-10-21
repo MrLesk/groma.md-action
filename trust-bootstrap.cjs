@@ -205,6 +205,15 @@ function prepareTrust({ env = process.env, bundled = tls.rootCertificates,
   // forces CA loading to fail; direct requests and HTTP proxies ignore it.
   fs.writeFileSync(bundle + '.no-https-proxy', '', { mode: 0o600 });
   const git = filteredGitTrust(env, directory, empty, read);
+  // Git defaults use OS roots, rather than gaining Node-only bundled/extra CAs.
+  // Explicit Git CA selections above retain their own filtered policy.
+  const defaults = git.environment.GIT_SSL_CAINFO !== undefined ? [] : repositoryURLs(env)
+    .filter(url => !git.selected.some(([key]) => key === `http.${url}.sslCAInfo`));
+  if (defaults.length) {
+    const systemBundle = path.join(directory, 'git-system-ca.pem');
+    fs.writeFileSync(systemBundle, filterAuthorities(getCertificates?.('system') ?? []), { mode: 0o600 });
+    git.selected.push(...defaults.map(url => [`http.${url}.sslCAInfo`, systemBundle]));
+  }
   const selectedNpm = npmInputs === undefined ? npmAuthorities({ env }) : npmInputs;
   const npmBundle = path.join(directory, 'npm-ca.pem');
   fs.writeFileSync(npmBundle, selectedNpm === null ? pem : filterAuthorities(selectedNpm));

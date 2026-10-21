@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T16:22:00Z'
+updated_date: '2026-10-21T16:40:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -94,4 +94,6 @@ Final integration review: default checkout/publication Git CA policy is scoped t
 Coordinated native HTTPS proxy review: real Git still accepted the emudhra proxy and sent fake Proxy-Authorization with a filtered private-only proxy CA file, because libcurl retains its separate system proxy CA-directory fallback and Git exposes no proxy CApath control. The hotfix now deliberately blocks native Git HTTPS proxy transport using an owned empty GIT_PROXY_SSL_CAINFO before CONNECT/authentication. Direct HTTPS and authenticated HTTP CONNECT proxies retain private-origin TLS; unused invalid caller proxy CA settings do not abort direct requests. Private HTTPS proxies are included in this temporary documented restriction. No unsupported proxy verification knobs or transport relay were introduced. Native unfiltered positive controls cover private and both incident proxy chains; guarded connections send zero CONNECT/authentication for all of them. New final hosted CI/reviews required.
 
 Final native-proxy platform review: hosted Ubuntu Git 2.55 proved that an empty proxy CAfile can return zero imported anchors and still use the system CA directory. Replaced that policy with an unusable child path beneath an owned regular markerfile (ENOTDIR); no caller proxy CA path is read. Windows paired raw/guard controls use the real Git OpenSSL backend because Schannel can already revoke incident roots independently; additional Schannel guarded cases require the owned-path loader error, zero proxy HTTP/auth and no timeout. Direct HTTPS and authenticated HTTP CONNECT remain supported. 50 local Node tests and six strict YAML documents pass; final exact-head hosted/review/publication gates remain pending.
+
+Shared native-Git default-trust review: keep Node/npm policies separate from Git. Added a 9-line Git-specific OS-system fallback only for repository URL forms with no explicit selected Git CA file; explicit Git CA files/directories and unrelated remotes retain their filtered policies. A real NodeExtra-only private CA regression proves plain Git rejects the peer and the Action must also send zero HTTP/auth. Reverting only the production narrowing reproduces one authenticated HTTP request. Final local 51 Node tests pass; six strict YAML documents and diff check pass. New exact-head hosted matrices, Groma0.7.4 smoke and completed code/security reviews remain required. No backend-discovery framework or global runtime trust rewrite was added.
 <!-- SECTION:NOTES:END -->
