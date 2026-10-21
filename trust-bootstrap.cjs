@@ -24,12 +24,17 @@ function filterAuthorities(inputs, allowEmpty = false) {
   const certificates = new Map();
   for (const input of inputs.flat(Infinity)) {
     if (!input || !String(input).trim()) continue;
-    const matches = String(input).match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
+    const matches = String(input).match(/-----BEGIN ((?:TRUSTED )?CERTIFICATE)-----[\s\S]+?-----END \1-----/g);
     if (!matches) throw new Error('Configured CA input contains no PEM certificates.');
     for (const pem of matches) {
       const certificate = new X509Certificate(pem);
       const key = createHash('sha256').update(certificate.publicKey.export({ type: 'spki', format: 'der' })).digest('hex');
-      if (!blockedSPKI.has(key)) certificates.set(certificate.fingerprint256, certificate.toString());
+      if (!blockedSPKI.has(key)) {
+        // OpenSSL AUX trust/reject directives must survive unchanged and must
+        // not be merged with a plain certificate or a different AUX policy.
+        const trusted = pem.startsWith('-----BEGIN TRUSTED CERTIFICATE-----');
+        certificates.set(trusted ? pem : certificate.fingerprint256, trusted ? pem : certificate.toString());
+      }
     }
   }
   if (!certificates.size) {
@@ -159,16 +164,22 @@ function filteredGitTrust(env, directory, empty, read) {
       fs.mkdirSync(target);
       const groups = new Map();
       const directoryPEM = contents => {
-        const certificates = /-----BEGIN CERTIFICATE-----/.test(contents)
+        const certificates = /-----BEGIN (?:TRUSTED )?CERTIFICATE-----/.test(contents)
           ? filterAuthorities([contents], true) : '';
         const crls = contents.match(/-----BEGIN X509 CRL-----[\s\S]+?-----END X509 CRL-----/g) ?? [];
-        if (!/-----BEGIN CERTIFICATE-----/.test(contents) && !crls.length) return undefined;
+        if (!/-----BEGIN (?:TRUSTED )?CERTIFICATE-----/.test(contents) && !crls.length) return undefined;
         return [certificates, ...crls].filter(Boolean).join('\n');
       };
       for (const name of fs.readdirSync(value)) {
         const source = path.join(value, name);
-        if (!fs.statSync(source).isFile()) continue;
-        const contents = read(source, 'utf8');
+        let contents;
+        try {
+          if (!fs.statSync(source).isFile()) continue;
+          contents = read(source, 'utf8');
+        } catch (error) {
+          if (error.code === 'ENOENT') continue; // Native Git skips dangling directory entries.
+          throw error;
+        }
         // GnuTLS also reads ordinary PEM filenames. Keep native directory lookup
         // semantics instead of promoting these authorities into the CA file.
         const pem = directoryPEM(contents);

@@ -17,7 +17,7 @@ import { blockedSPKI, filterAuthorities, npmAuthorities, trustSettings, prepareT
 const fixture = path.join(import.meta.dirname, 'fixtures/certificate-trust');
 const incidents = JSON.parse(await readFile(path.join(fixture, 'compromised-cas.json'), 'utf8')).certificates;
 const privateCA = await readFile(path.join(fixture, 'registry-ca.pem'), 'utf8');
-const certificates = pem => pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
+const certificates = pem => pem.match(/-----BEGIN ((?:TRUSTED )?CERTIFICATE)-----[\s\S]+?-----END \1-----/g) ?? [];
 const key = pem => createHash('sha256').update(new X509Certificate(pem).publicKey.export({ type: 'spki', format: 'der' })).digest('hex');
 async function temporary(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'groma-trust-test-'));
@@ -530,7 +530,7 @@ it('Pages publication rejects a separate native push rewrite before either remot
 
 it('preserves native Git CA-directory layouts and keeps the selected CA file additive', async t => {
   const root = await temporary(t), config = path.join(root, 'gitconfig');
-  const { mkdir } = await import('node:fs/promises');
+  const { mkdir, symlink } = await import('node:fs/promises');
   const otherCA = path.join(fixture, 'other-registry-ca.pem');
   const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
     !/^(?:git_config(?:_.+)?|git_ssl_(?:no_verify|cainfo|capath)|git_proxy_ssl_cainfo|https?_proxy|all_proxy|no_proxy|ssl_cert_(?:file|dir)|curl_ca_bundle|node_extra_ca_certs)$/i.test(name)));
@@ -538,9 +538,20 @@ it('preserves native Git CA-directory layouts and keeps the selected CA file add
     NO_PROXY: '127.0.0.1,localhost', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' });
   const platform = process.platform === 'win32' ? ['-c', 'http.sslBackend=openssl'] : [];
   // Match the actual backend: GnuTLS reads ordinary files; OpenSSL uses subject hashes.
-  for (const basename of ['private.crt', 'private.pem', 'private', '81ee7702.0', '81ee7702.1', '1234abcd.0', 'multi-pem-gap', 'unrecognized-prefix', 'empty-prefix', 'blocked-then-unrecognized']) {
+  const layouts = ['private.crt', 'private.pem', 'private', '81ee7702.0', '81ee7702.1', '1234abcd.0', 'multi-pem-gap', 'unrecognized-prefix', 'empty-prefix', 'blocked-then-unrecognized', 'trusted-hash', 'rejected-hash'];
+  if (process.platform !== 'win32') layouts.push('dangling-symlink', 'dangling-hash-gap');
+  for (const basename of layouts) {
     const source = path.join(root, basename); await mkdir(source);
-    if (basename === 'blocked-then-unrecognized') {
+    if (basename === 'trusted-hash' || basename === 'rejected-hash') {
+      await writeFile(path.join(source, '81ee7702.0'), await readFile(path.join(fixture,
+        basename === 'trusted-hash' ? 'trusted-registry-ca.pem' : 'rejected-registry-ca.pem')));
+    } else if (basename === 'dangling-symlink') {
+      await writeFile(path.join(source, '81ee7702.0'), privateCA);
+      await symlink(path.join(source, 'absent'), path.join(source, 'unrelated.pem'));
+    } else if (basename === 'dangling-hash-gap') {
+      await symlink(path.join(source, 'absent'), path.join(source, '81ee7702.0'));
+      await writeFile(path.join(source, '81ee7702.1'), privateCA);
+    } else if (basename === 'blocked-then-unrecognized') {
       await writeFile(path.join(source, '81ee7702.0'), incidents[0].pem);
       await writeFile(path.join(source, '81ee7702.1'), 'not PEM');
       await writeFile(path.join(source, '81ee7702.2'), privateCA);
@@ -576,11 +587,74 @@ it('preserves native Git CA-directory layouts and keeps the selected CA file add
         requests = 0; authorization = undefined;
         const directory = path.join(root, `${basename}-${mode}-${filename}`); await mkdir(directory);
         const settings = prepareTrust({ env, directory, bundled: [tls.rootCertificates[0]], npmInputs: null });
+        if (basename === 'dangling-hash-gap') {
+          const selectedDirectory = mode === 'environment' ? settings.GIT_SSL_CAPATH
+            : (await promisify(execFile)('git', ['config', '--get-urlmatch', 'http.sslCAPath', remote], { env: { ...env, ...settings } })).stdout.trim();
+          assert.equal((await readdir(selectedDirectory)).includes('81ee7702.0'), false);
+        }
         const result = await run({ ...env, ...settings });
         assert.ok(Number.isInteger(result?.code) && !result.killed, result?.message);
         assert.equal(requests > 0, nativeAccepted, `${basename}/${mode}/${filename}: ${result.stderr}`);
         assert.equal(authorization, nativeAccepted ? 'Bearer fixture-only' : undefined);
         assert.match(result.stderr, nativeAccepted ? /404|not found/i : /certificate|SSL|issuer|trust/i);
+      } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    }
+  }
+});
+
+it('retains OpenSSL AUX trust directives without merging different certificate policies', async () => {
+  const trusted = (await readFile(path.join(fixture, 'trusted-registry-ca.pem'), 'utf8')).trim();
+  const rejected = (await readFile(path.join(fixture, 'rejected-registry-ca.pem'), 'utf8')).trim();
+  const incident = await readFile(path.join(fixture, 'trusted-compromised-cas.pem'), 'utf8');
+  const actual = certificates(filterAuthorities([trusted, rejected, privateCA, trusted]));
+  assert.equal(actual.length, 3);
+  assert.equal(actual[0], trusted);
+  assert.equal(actual[1], rejected);
+  assert.equal(actual[2].startsWith('-----BEGIN CERTIFICATE-----'), true);
+  assert.deepEqual(certificates(filterAuthorities([incident, trusted])), [trusted]);
+  assert.throws(() => filterAuthorities([incident]), /No trusted certificate/);
+});
+
+it('matches native Git trusted-PEM acceptance and AUX rejection while excluding incident keys', async t => {
+  const root = await temporary(t), config = path.join(root, 'gitconfig'), ca = path.join(root, 'selected.pem');
+  const { mkdir } = await import('node:fs/promises'); await mkdir(path.join(root, 'empty'));
+  const trusted = await readFile(path.join(fixture, 'trusted-registry-ca.pem'), 'utf8');
+  const rejected = await readFile(path.join(fixture, 'rejected-registry-ca.pem'), 'utf8');
+  const incident = await readFile(path.join(fixture, 'trusted-compromised-cas.pem'), 'utf8');
+  const policies = [trusted, rejected, rejected + '\n' + trusted, trusted + '\n' + rejected, incident + '\n' + trusted];
+  const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+    !/^(?:git_config(?:_.+)?|git_ssl_.*|git_proxy_ssl_cainfo|https?_proxy|all_proxy|no_proxy|ssl_cert_(?:file|dir)|curl_ca_bundle|node_extra_ca_certs)$/i.test(name)));
+  Object.assign(clean, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config,
+    NO_PROXY: '127.0.0.1,localhost', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never',
+    GIT_SSL_CAINFO: ca, GIT_SSL_CAPATH: path.join(root, 'empty') });
+  await writeFile(config, `[http]\n sslVerify = true\n extraHeader = Authorization: Bearer trusted-fixture\n`
+    + (process.platform === 'win32' ? ' sslBackend = openssl\n' : ''));
+  for (const [index, policy] of policies.entries()) {
+    await writeFile(ca, policy);
+    for (const filename of ['registry-server.pem', 'incident-server-emudhra.pem', 'incident-server-aaa.pem']) {
+      let requests = 0, authorization;
+      const server = https.createServer({ key: await readFile(path.join(fixture, 'registry-server-key.pem')),
+        cert: await readFile(path.join(fixture, filename)) }, (request, response) => {
+        requests++; authorization = request.headers.authorization; response.writeHead(404); response.end('fixture');
+      });
+      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+      try {
+        const origin = `https://localhost:${server.address().port}`, remote = `${origin}/owner/fixture`;
+        const env = { ...clean, GITHUB_SERVER_URL: origin, GITHUB_REPOSITORY: 'owner/fixture' };
+        const run = child => promisify(execFile)('git', ['ls-remote', remote], { env: child, timeout: 10000 })
+          .then(() => null, error => error);
+        const raw = await run(env);
+        assert.ok(Number.isInteger(raw?.code) && !raw.killed, raw?.message);
+        const nativeAccepted = requests > 0;
+        requests = 0; authorization = undefined;
+        const directory = path.join(root, `${index}-${filename}`); await mkdir(directory);
+        const settings = prepareTrust({ env, directory, npmInputs: null });
+        const result = await run({ ...env, ...settings });
+        const accepted = filename === 'registry-server.pem' && nativeAccepted;
+        assert.ok(Number.isInteger(result?.code) && !result.killed, result?.message);
+        assert.equal(requests > 0, accepted, `${index}/${filename}: ${result.stderr}`);
+        assert.equal(authorization, accepted ? 'Bearer trusted-fixture' : undefined);
+        assert.match(result.stderr, accepted ? /404|not found/i : /certificate|SSL|issuer|trust/i);
       } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     }
   }
