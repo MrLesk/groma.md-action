@@ -197,6 +197,7 @@ jobs:
                   const certificates = /-----BEGIN CERTIFICATE-----/.test(contents)
                     ? filterAuthorities([contents], true) : '';
                   const crls = contents.match(/-----BEGIN X509 CRL-----[\s\S]+?-----END X509 CRL-----/g) ?? [];
+                  if (!/-----BEGIN CERTIFICATE-----/.test(contents) && !crls.length) return undefined;
                   return [certificates, ...crls].filter(Boolean).join('\n');
                 };
                 for (const name of fs.readdirSync(value)) {
@@ -217,6 +218,7 @@ jobs:
                   // OpenSSL ignores later entries after a gap. Keep the retained chain contiguous.
                   while (entries.has(input)) {
                     const pem = directoryPEM(read(path.join(value, `${hash}.${input++}`), 'utf8'));
+                    if (pem === undefined) break; // Preserve an unrecognized native entry as a lookup boundary.
                     if (pem) fs.writeFileSync(path.join(target, `${hash}.${output++}`), pem, { mode: 0o600 });
                   }
                 }

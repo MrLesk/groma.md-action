@@ -538,9 +538,12 @@ it('preserves native Git CA-directory layouts and keeps the selected CA file add
     NO_PROXY: '127.0.0.1,localhost', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' });
   const platform = process.platform === 'win32' ? ['-c', 'http.sslBackend=openssl'] : [];
   // Match the actual backend: GnuTLS reads ordinary files; OpenSSL uses subject hashes.
-  for (const basename of ['private.crt', 'private.pem', 'private', '81ee7702.0', '81ee7702.1', '1234abcd.0', 'multi-pem-gap']) {
+  for (const basename of ['private.crt', 'private.pem', 'private', '81ee7702.0', '81ee7702.1', '1234abcd.0', 'multi-pem-gap', 'unrecognized-prefix']) {
     const source = path.join(root, basename); await mkdir(source);
-    if (basename === 'multi-pem-gap') {
+    if (basename === 'unrecognized-prefix') {
+      await writeFile(path.join(source, '81ee7702.0'), 'not PEM');
+      await writeFile(path.join(source, '81ee7702.1'), privateCA);
+    } else if (basename === 'multi-pem-gap') {
       await writeFile(path.join(source, '81ee7702.0'), (await readFile(otherCA, 'utf8')) + '\n' + tls.rootCertificates[0]);
       await writeFile(path.join(source, '81ee7702.2'), privateCA);
     } else await writeFile(path.join(source, basename), privateCA);
