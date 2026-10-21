@@ -223,14 +223,17 @@ function prepareTrust({ env = process.env, bundled = tls.rootCertificates,
   // forces CA loading to fail; direct requests and HTTP proxies ignore it.
   fs.writeFileSync(bundle + '.no-https-proxy', '', { mode: 0o600 });
   const git = filteredGitTrust(env, directory, empty, read);
-  // Git defaults use OS roots, rather than gaining Node-only bundled/extra CAs.
-  // Explicit Git CA selections above retain their own filtered policy.
+  // A selected CA directory defines trust too; do not add OS/Node authorities to it.
   const defaults = git.environment.GIT_SSL_CAINFO !== undefined ? [] : repositoryURLs(env)
     .filter(url => !git.selected.some(([key]) => key === `http.${url}.sslCAInfo`));
-  if (defaults.length) {
-    const systemBundle = path.join(directory, 'git-system-ca.pem');
-    fs.writeFileSync(systemBundle, filterAuthorities(getCertificates?.('system') ?? []), { mode: 0o600 });
-    git.selected.push(...defaults.map(url => [`http.${url}.sslCAInfo`, systemBundle]));
+  for (const [index, url] of defaults.entries()) {
+    const selectedDirectory = git.environment.GIT_SSL_CAPATH
+      ?? git.selected.find(([key]) => key === `http.${url}.sslCAPath`)?.[1];
+    const inputs = selectedDirectory === undefined ? getCertificates?.('system') ?? []
+      : fs.readdirSync(selectedDirectory).map(name => read(path.join(selectedDirectory, name), 'utf8'));
+    const selectedBundle = path.join(directory, `git-default-ca-${index}.pem`);
+    fs.writeFileSync(selectedBundle, filterAuthorities(inputs), { mode: 0o600 });
+    git.selected.push([`http.${url}.sslCAInfo`, selectedBundle]);
   }
   const selectedNpm = npmInputs === undefined ? npmAuthorities({ env }) : npmInputs;
   const npmBundle = path.join(directory, 'npm-ca.pem');

@@ -475,6 +475,54 @@ it('filters explicit Git CA directories without widening trust through hash gaps
     bundled: [privateCA], getCertificates: () => [], npmInputs: null }), /Git CA file is empty/);
 });
 
+it('keeps CA-directory-only Git trust separate from OS and Node authorities', async t => {
+  const root = await temporary(t), source = path.join(root, 'selected-ca'), config = path.join(root, 'gitconfig');
+  const { mkdir } = await import('node:fs/promises'); await mkdir(source);
+  // OpenSSL subject hash of registry-ca.pem; no runtime OpenSSL executable is needed.
+  await writeFile(path.join(source, '81ee7702.0'), privateCA);
+  const otherCA = await readFile(path.join(fixture, 'other-registry-ca.pem'), 'utf8');
+  const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+    !/^(?:git_config(?:_.+)?|git_ssl_(?:no_verify|cainfo|capath)|git_proxy_ssl_cainfo|https?_proxy|all_proxy|no_proxy|ssl_cert_(?:file|dir)|curl_ca_bundle|node_extra_ca_certs)$/i.test(name)));
+  Object.assign(clean, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config,
+    NO_PROXY: '127.0.0.1,localhost', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' });
+  const platform = process.platform === 'win32' ? ['-c', 'http.sslBackend=openssl'] : [];
+  for (const mode of ['environment', 'url']) for (const filename of ['registry-server.pem', 'other-registry-server.pem']) {
+    let requests = 0, authorization;
+    const server = https.createServer({ key: await readFile(path.join(fixture, 'registry-server-key.pem')),
+      cert: await readFile(path.join(fixture, filename)) }, (request, response) => {
+      requests++; authorization = request.headers.authorization; response.writeHead(404); response.end('fixture');
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const origin = `https://localhost:${server.address().port}`, remote = `${origin}/owner/fixture`;
+      await writeFile(config, `[http "${remote}"]\n extraHeader = Authorization: Bearer fixture-only\n`
+        + (mode === 'url' ? ` sslCAPath = ${JSON.stringify(source)}\n` : ''));
+      const env = { ...clean, GITHUB_SERVER_URL: origin, GITHUB_REPOSITORY: 'owner/fixture',
+        ...(mode === 'environment' ? { GIT_SSL_CAPATH: source } : {}) };
+      const run = child => promisify(execFile)('git', [...platform, 'ls-remote', remote], { env: child, timeout: 10000 })
+        .then(() => null, error => error);
+      const before = await run(env);
+      assert.ok(Number.isInteger(before?.code) && !before.killed, before?.message);
+      assert.equal(requests > 0, filename === 'registry-server.pem', before.stderr);
+      requests = 0; authorization = undefined;
+      const directory = path.join(root, `${mode}-${filename}`); await mkdir(directory);
+      const settings = prepareTrust({ env, directory, bundled: [otherCA], npmInputs: null,
+        getCertificates: kind => kind === 'system' ? [otherCA] : [] });
+      const child = { ...env, ...settings }, result = await run(child);
+      assert.ok(Number.isInteger(result?.code) && !result.killed, result?.message);
+      if (filename === 'registry-server.pem') {
+        assert.ok(requests > 0, result.stderr);
+        assert.equal(authorization, 'Bearer fixture-only');
+        assert.match(result.stderr, /404|not found/i);
+      } else {
+        assert.equal(requests, 0, `Directory-only trust must not gain an OS/Node CA; authSent=${authorization !== undefined}`);
+        assert.equal(authorization, undefined);
+        assert.match(result.stderr, /certificate|SSL|issuer|trust/i);
+      }
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+  }
+});
+
 it('native Git parses strict URL configuration with equals and apostrophes while preserving inherited command scope', async () => {
   const env = { ...process.env, GITHUB_SERVER_URL: "https://example.invalid/it's=enterprise", GITHUB_REPOSITORY: 'owner/fixture',
     GIT_CONFIG_COUNT: '0', GIT_CONFIG_PARAMETERS: "'http.userAgent'='Original-Caller'" };
