@@ -183,13 +183,13 @@ it('exports safe workflow settings without forbidden NODE_OPTIONS or environment
 it('installs current npm before the exact Groma pin using native npm with explicit strict TLS', () => {
   const calls = [], settings = { ...trustSettings('/global.pem', '/empty'),
     NPM_CONFIG_CAFILE: '/private filtered.pem', npm_config_cafile: '/private filtered.pem' };
-  installGroma('0.7.5', settings, { env: { HTTPS_PROXY: 'http://proxy.example', NPM_TOKEN: 'preserved', GIT_SSL_NO_VERIFY: 'false', git_ssl_no_verify: '1' },
+  installGroma('0.7.6', settings, { env: { HTTPS_PROXY: 'http://proxy.example', NPM_TOKEN: 'preserved', GIT_SSL_NO_VERIFY: 'false', git_ssl_no_verify: '1' },
     execute: (args, env) => { calls.push(args); assert.equal(env.HTTPS_PROXY, 'http://proxy.example');
       assert.equal(env.NPM_TOKEN, 'preserved'); assert.equal(env.NODE_OPTIONS, '--use-openssl-ca');
       assert.equal(Object.keys(env).some(key => key.toUpperCase() === 'GIT_SSL_NO_VERIFY'), false); } });
-  assert.deepEqual(calls, [installArguments('npm@12.2.0', settings.NPM_CONFIG_CAFILE), installArguments('groma.md@0.7.5', settings.NPM_CONFIG_CAFILE)]);
+  assert.deepEqual(calls, [installArguments('npm@12.2.0', settings.NPM_CONFIG_CAFILE), installArguments('groma.md@0.7.6', settings.NPM_CONFIG_CAFILE)]);
   for (const args of calls) { assert.ok(args.includes('--strict-ssl=true')); assert.ok(args.includes('--cafile=/private filtered.pem')); }
-  assert.throws(() => installArguments('groma.md@0.7.5;echo unsafe', 'ca'));
+  assert.throws(() => installArguments('groma.md@0.7.6;echo unsafe', 'ca'));
   const executions = [];
   runNpm(calls[1], {}, { query: () => '/native/global modules', exists: () => true,
     execute: (...args) => executions.push(args) });

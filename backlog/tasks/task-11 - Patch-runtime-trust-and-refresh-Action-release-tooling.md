@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T17:49:00Z'
+updated_date: '2026-10-21T19:17:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -42,7 +42,7 @@ Update Action runtimes and certificate validation while preserving supported pri
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The Action and workflow examples use patched Node/npm and current Action releases, with default Groma0.7.5.
+- [ ] #1 The Action and workflow examples use patched Node/npm and current Action releases, with default Groma 0.7.6.
 - [ ] #2 Certificate validation excludes compromised keys while preserving supported private CA settings, authentication and inherited Git configuration.
 - [ ] #3 Native compatibility and certificate rejection tests pass on Linux, macOS and Windows, and workflow YAML validates.
 - [ ] #4 The GitHub Release workflow verifies the published CLI and advances only the supported major Action tag after checks pass.
