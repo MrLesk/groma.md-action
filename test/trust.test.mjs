@@ -402,10 +402,11 @@ it('native Git blocks HTTPS proxies before CONNECT or credentials, including bot
     !/^(?:git_config(?:_.+)?|git_ssl_(?:no_verify|cainfo|capath)|git_proxy_ssl_cainfo|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
   Object.assign(clean, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config,
     NO_PROXY: '', no_proxy: '', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' });
-  const platform = process.platform === 'win32'
-    ? ['-c', 'http.sslBackend=schannel', '-c', 'http.schannelCheckRevoke=false'] : [];
   const remote = 'https://fixture-origin.invalid/owner/fixture.git';
-  for (const mode of ['environment', 'url', 'invalid', 'default']) {
+  const backends = process.platform === 'win32' ? ['openssl', 'schannel'] : [undefined];
+  for (const [backend, mode] of backends.flatMap(backend =>
+    ['environment', 'url', 'invalid', 'default'].map(mode => [backend, mode]))) {
+    const platform = backend ? ['-c', `http.sslBackend=${backend}`, '-c', 'http.schannelCheckRevoke=false'] : [];
     for (const filename of mode === 'default' ? ['registry-server.pem']
       : ['registry-server.pem', 'incident-server-emudhra.pem', 'incident-server-aaa.pem']) {
       let requests = 0, authorization;
@@ -427,7 +428,7 @@ it('native Git blocks HTTPS proxies before CONNECT or credentials, including bot
       server.on('tlsClientError', () => {});
       await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
       try {
-        const directory = path.join(root, mode + filename);
+        const directory = path.join(root, `${backend ?? 'native'}-${mode}-${filename}`);
         const proxy = `https://fixture-user:fixture-password@localhost:${server.address().port}`;
         await writeFile(config, mode === 'url' ? `[http "${remote}"]\n proxySSLCAInfo = ${JSON.stringify(raw)}\n` : '');
         const args = [...platform, '-c', `http.proxy=${proxy}`, '-c', 'http.proxyAuthMethod=basic', 'ls-remote', remote];
@@ -439,11 +440,15 @@ it('native Git blocks HTTPS proxies before CONNECT or credentials, including bot
           env.git_proxy_ssl_cainfo = env.GIT_PROXY_SSL_CAINFO; delete env.GIT_PROXY_SSL_CAINFO;
         }
         // Strict unfiltered control: the proxy receives credentials before origin TLS begins.
-        const before = await promisify(execFile)('git', args, { env: { ...env, GIT_PROXY_SSL_CAINFO: raw }, timeout: 10000 })
-          .then(() => null, error => error);
-        assert.ok(Number.isInteger(before?.code) && !before.killed, before?.message);
-        assert.ok(requests > 0, `${mode}/${filename}: ${before?.stderr}`);
-        assert.equal(authorization, 'Basic ' + Buffer.from('fixture-user:fixture-password').toString('base64'));
+        // Windows uses its real Git OpenSSL backend for this paired proof: Schannel
+        // may already revoke incident keys independently of the application's policy.
+        if (backend !== 'schannel') {
+          const before = await promisify(execFile)('git', args, { env: { ...env, GIT_PROXY_SSL_CAINFO: raw }, timeout: 10000 })
+            .then(() => null, error => error);
+          assert.ok(Number.isInteger(before?.code) && !before.killed, before?.message);
+          assert.ok(requests > 0, `${backend}/${mode}/${filename}: ${before?.stderr}`);
+          assert.equal(authorization, 'Basic ' + Buffer.from('fixture-user:fixture-password').toString('base64'));
+        }
         requests = 0; authorization = undefined;
         const settings = prepareTrust({ env, directory, npmInputs: null,
           bundled: [mode === 'default' ? privateCA : tls.rootCertificates[0]], getCertificates: () => [] });
@@ -454,8 +459,14 @@ it('native Git blocks HTTPS proxies before CONNECT or credentials, including bot
         assert.ok(Number.isInteger(result?.code) && !result.killed, result?.message);
         assert.equal(requests, 0, `${mode}/${filename}: ${result?.stderr}`);
         assert.equal(authorization, undefined);
-        assert.equal((await readFile(settings.GIT_PROXY_SSL_CAINFO)).length, 0);
+        assert.equal((await readFile(path.dirname(settings.GIT_PROXY_SSL_CAINFO))).length, 0);
+        await assert.rejects(readFile(settings.GIT_PROXY_SSL_CAINFO), /ENOTDIR|ENOENT/);
         assert.match(result.stderr, /certificate|SSL|issuer|trust|schannel|revok/i);
+        if (backend === 'schannel') {
+          // Require the owned-path loader failure, rather than ambient OS revocation.
+          assert.ok(result.stderr.replaceAll('\\', '/').toLowerCase()
+            .includes(settings.GIT_PROXY_SSL_CAINFO.replaceAll('\\', '/').toLowerCase()), result.stderr);
+        }
       } finally { for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)); }
     }
   }
