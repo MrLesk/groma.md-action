@@ -538,11 +538,14 @@ it('preserves native Git CA-directory layouts and keeps the selected CA file add
     NO_PROXY: '127.0.0.1,localhost', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' });
   const platform = process.platform === 'win32' ? ['-c', 'http.sslBackend=openssl'] : [];
   // Match the actual backend: GnuTLS reads ordinary files; OpenSSL uses subject hashes.
-  const layouts = ['private.crt', 'private.pem', 'private', '81ee7702.0', '81ee7702.1', '1234abcd.0', 'multi-pem-gap', 'unrecognized-prefix', 'empty-prefix', 'blocked-then-unrecognized', 'trusted-hash', 'rejected-hash'];
+  const layouts = ['private.crt', 'private.pem', 'private', '81ee7702.0', '81ee7702.1', '1234abcd.0', 'multi-pem-gap', 'unrecognized-prefix', 'empty-prefix', 'blocked-then-unrecognized', 'trusted-hash', 'rejected-hash', 'malformed-sidecar'];
   if (process.platform !== 'win32') layouts.push('dangling-symlink', 'dangling-hash-gap');
   for (const basename of layouts) {
     const source = path.join(root, basename); await mkdir(source);
-    if (basename === 'trusted-hash' || basename === 'rejected-hash') {
+    if (basename === 'malformed-sidecar') {
+      await writeFile(path.join(source, '81ee7702.0'), privateCA);
+      await writeFile(path.join(source, 'malformed.pem'), ['-----BEGIN CERTIFICATE-----', 'invalid!', '-----END CERTIFICATE-----'].join('\n'));
+    } else if (basename === 'trusted-hash' || basename === 'rejected-hash') {
       await writeFile(path.join(source, '81ee7702.0'), await readFile(path.join(fixture,
         basename === 'trusted-hash' ? 'trusted-registry-ca.pem' : 'rejected-registry-ca.pem')));
     } else if (basename === 'dangling-symlink') {
@@ -599,6 +602,16 @@ it('preserves native Git CA-directory layouts and keeps the selected CA file add
         assert.match(result.stderr, nativeAccepted ? /404|not found/i : /certificate|SSL|issuer|trust/i);
       } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     }
+  }
+});
+
+it('keeps malformed selected Git CA files and hash entries strict', async t => {
+  const root = await temporary(t), source = path.join(root, 'selected');
+  const { mkdir } = await import('node:fs/promises'); await mkdir(source);
+  const ca = path.join(source, '81ee7702.0');
+  await writeFile(ca, ['-----BEGIN CERTIFICATE-----', 'invalid!', '-----END CERTIFICATE-----'].join('\n'));
+  for (const env of [{ GIT_SSL_CAINFO: ca }, { GIT_SSL_CAPATH: source }]) {
+    assert.throws(() => prepareTrust({ env, bundled: [privateCA], getCertificates: () => [], npmInputs: null }), /PEM|base64|certificate/i);
   }
 });
 

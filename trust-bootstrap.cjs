@@ -163,10 +163,15 @@ function filteredGitTrust(env, directory, empty, read) {
     else {
       fs.mkdirSync(target);
       const groups = new Map();
-      const directoryPEM = contents => {
-        const certificates = /-----BEGIN (?:TRUSTED )?CERTIFICATE-----/.test(contents)
-          ? filterAuthorities([contents], true) : '';
+      const directoryPEM = (contents, ordinary = false) => {
         const crls = contents.match(/-----BEGIN X509 CRL-----[\s\S]+?-----END X509 CRL-----/g) ?? [];
+        let certificates = '';
+        try {
+          if (/-----BEGIN (?:TRUSTED )?CERTIFICATE-----/.test(contents)) certificates = filterAuthorities([contents], true);
+        } catch (error) {
+          if (!ordinary) throw error; // Selected hash entries stay strict.
+          return crls.length ? crls.join('\n') : undefined;
+        }
         if (!/-----BEGIN (?:TRUSTED )?CERTIFICATE-----/.test(contents) && !crls.length) return undefined;
         return [certificates, ...crls].filter(Boolean).join('\n');
       };
@@ -182,8 +187,8 @@ function filteredGitTrust(env, directory, empty, read) {
         }
         // GnuTLS also reads ordinary PEM filenames. Keep native directory lookup
         // semantics instead of promoting these authorities into the CA file.
-        const pem = directoryPEM(contents);
         const match = /^([a-f0-9]{8})\.(0|[1-9][0-9]*)$/i.exec(name);
+        const pem = directoryPEM(contents, !match);
         // Keep unknown regular-file hash slots as empty markers. Git backends
         // differ in whether they continue lookup after these slots.
         if (pem || match) fs.writeFileSync(path.join(target, name), pem ?? '', { mode: 0o600 });
