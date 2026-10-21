@@ -127,7 +127,7 @@ it('installs current npm before the exact Groma pin using native npm with explic
   runNpm(calls[1], {}, { query: () => '/custom/empty-prefix',
     exists: candidate => candidate === path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js'),
     execute: (...args) => executions.push(args) });
-  assert.ok(executions[1][1][0].endsWith('npm/bin/npm-cli.js'));
+  assert.ok(executions[1][1][0].endsWith(path.join('npm', 'bin', 'npm-cli.js')));
 });
 
 it('the filtered bundle accepts a private loopback registry and rejects both compromised authentication paths', async t => {
@@ -149,10 +149,10 @@ it('the filtered bundle accepts a private loopback registry and rejects both com
 });
 
 it('all four workflow entry points embed the exact offline bootstrap before network steps', async () => {
-  const source = await readFile(new URL('../trust-bootstrap.cjs', import.meta.url), 'utf8');
+  const source = (await readFile(new URL('../trust-bootstrap.cjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
   const expected = source.slice(0, source.indexOf('module.exports =')) + 'exportSettings(prepareTrust(), process.env.GITHUB_ENV);\n';
   for (const filename of ['.github/workflows/check.yml', '.github/workflows/groma-demo.yml', 'examples/pages.yml', 'examples/pull-request.yml']) {
-    const content = await readFile(new URL('../' + filename, import.meta.url), 'utf8');
+    const content = (await readFile(new URL('../' + filename, import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
     const inline = content.match(/          node <<'NODE'\n([\s\S]+?)          NODE\n/)[1].split('\n').map(line => line.slice(10)).join('\n');
     assert.equal(inline.trim(), expected.trim(), filename);
     assert.match(content, /NODE_OPTIONS: --use-openssl-ca/);
@@ -169,7 +169,7 @@ it('native Git reaches the private-CA mock 404 and sends no HTTP request through
   const key = await readFile(path.join(fixture, 'registry-server-key.pem'));
   const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
     !/^(?:git_config(?:_.+)?|git_ssl_no_verify|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
-  const env = { ...clean, ...trustSettings(cafile, empty),
+  const env = { ...clean, ...trustSettings(cafile, empty, clean),
     GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(root, 'no-global-config'),
     NO_PROXY: '127.0.0.1,localhost' };
   // Isolated tests suppress only Schannel's online revocation lookup for these synthetic leaves.

@@ -1,11 +1,11 @@
 ---
 id: TASK-11
 title: Patch runtime trust and refresh Action release tooling
-status: Done
+status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T13:17:00Z'
+updated_date: '2026-10-21T14:08:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -52,6 +52,8 @@ The October 2026 CA compromise affects the Action and workflow network steps bef
 
 <!-- SECTION:PLAN:BEGIN -->
 1. Read the project and Backlog workflow guidance and recover pinned runtime/key/fixture inputs. 2. Add offline CA filtering and strict npm setup, then wire it before workflow network steps and update runtime/action/CLI versions. 3. Add meaningful security/compatibility regressions, validate Node tests and six YAML files, and document coordinated release. 4. Finalize TASK-11 and commit locally without attempting remote writes.
+
+5. Publish the reviewed tree after repository access is granted, fix hosted portability failures, and add the approved release-published v1 advancement after read-only checks and real Groma smoke.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -64,6 +66,8 @@ GitHub installation 113376443 excludes MrLesk/groma.md-action and previously ret
 Security review corrected a Git environment mistake: any GIT_SSL_NO_VERIFY value, including false, disables verification. Removed it entirely from trustSettings and all four inline bootstraps; no empty GITHUB_ENV replacement is written. Explicit installer, comparison and publisher child environments omit inherited case variants of that variable. Publisher authentication now validates and appends to inherited GIT_CONFIG_COUNT instead of discarding Schannel/sslVerify entries. Regression coverage uses only fake auth values.
 
 All 39 Node tests pass. The new native Git HTTPS regression uses one isolated config for the private CA and both compromised chains: the private CA reaches the mock404; both incident chains reach zero HTTP requests. Windows-only fixture options select Schannel and disable synthetic-leaf revocation lookup because GIT_CONFIG_NOSYSTEM hides backend selection; production revocation policy is unchanged. A mutation control restoring the old false-valued export caused native Git to reach the compromised mock and the regression failed as required. All six YAML files pass strict duplicate-key validation and git diff --check passes. GitHub access remains blocked; no push or fallback was attempted.
+
+Repository access is now enabled and draft PR10 is open. Initial hosted checks exposed fixture isolation/portability mistakes: the native Git fixture inherited the parent count after removing parent indexed entries; Windows source matching needed CRLF normalization and a path assertion needed native separators. Fixed these test inputs without changing TLS requirements. All39 tests pass locally with the actual two-entry hosted Git environment reproduced; hosted rerun remains required.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
