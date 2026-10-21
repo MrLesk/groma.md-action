@@ -4,6 +4,8 @@ import { promisify } from 'node:util';
 import { X509Certificate, createHash } from 'node:crypto';
 import { mkdtemp, readFile, writeFile, rm, readdir } from 'node:fs/promises';
 import https from 'node:https';
+import http from 'node:http';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import tls from 'node:tls';
@@ -336,7 +338,8 @@ it('keeps native Git private CA selection for GitHub and unrelated remotes witho
     try {
       const origin = `https://localhost:${server.address().port}`, remote = `${origin}/owner/fixture`;
       await writeFile(config, `[http "${remote}"]\n sslCAInfo = ${JSON.stringify(ca)}\n`);
-      const env = { ...clean, GITHUB_SERVER_URL: mode === 'unrelated' ? 'https://github.com' : origin,
+      const env = { ...clean, GIT_PROXY_SSL_CAINFO: path.join(root, 'unused-missing-proxy-ca.pem'),
+        GITHUB_SERVER_URL: mode === 'unrelated' ? 'https://github.com' : origin,
         GITHUB_REPOSITORY: 'owner/fixture', ...(mode === 'explicit' ? { GIT_SSL_CAINFO: ca } : {}) };
       const directory = path.join(root, mode);
       const { mkdir } = await import('node:fs/promises'); await mkdir(directory);
@@ -388,4 +391,120 @@ it('native Git parses strict URL configuration with equals and apostrophes while
   assert.equal((await execute('git', ['config', '--get-urlmatch', 'http.sslVerify',
     "https://example.invalid/it's=enterprise/owner/fixture"], { env: child })).stdout.trim(), 'true');
   assert.equal((await execute('git', ['config', '--get', 'http.userAgent'], { env: child })).stdout.trim(), 'Original-Caller');
+});
+
+
+it('native Git blocks HTTPS proxies before CONNECT or credentials, including both incident chains', async t => {
+  const root = await temporary(t), raw = path.join(root, 'raw-proxy-ca.pem'), config = path.join(root, 'gitconfig');
+  const originCA = path.join(fixture, 'other-registry-ca.pem');
+  await writeFile(raw, [...incidents.map(c => c.pem), privateCA].join('\n'));
+  const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+    !/^(?:git_config(?:_.+)?|git_ssl_(?:no_verify|cainfo|capath)|git_proxy_ssl_cainfo|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
+  Object.assign(clean, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config,
+    NO_PROXY: '', no_proxy: '', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' });
+  const platform = process.platform === 'win32'
+    ? ['-c', 'http.sslBackend=schannel', '-c', 'http.schannelCheckRevoke=false'] : [];
+  const remote = 'https://fixture-origin.invalid/owner/fixture.git';
+  for (const mode of ['environment', 'url', 'invalid', 'default']) {
+    for (const filename of mode === 'default' ? ['registry-server.pem']
+      : ['registry-server.pem', 'incident-server-emudhra.pem', 'incident-server-aaa.pem']) {
+      let requests = 0, authorization;
+      const pem = await readFile(path.join(fixture, filename)), leaf = new X509Certificate(pem), now = Date.now();
+      assert.ok(Date.parse(leaf.validFrom) <= now && now < Date.parse(leaf.validTo), `${filename} must be currently valid`);
+      const sockets = new Set();
+      const server = tls.createServer({ key: await readFile(path.join(fixture, 'registry-server-key.pem')), cert: pem }, socket => {
+        let headers = '';
+        socket.on('data', data => {
+          headers += data.toString();
+          if (!headers.includes('\r\n\r\n')) return;
+          requests++;
+          authorization = /proxy-authorization:\s*([^\r\n]+)/i.exec(headers)?.[1];
+          socket.removeAllListeners('data');
+          socket.end('HTTP/1.1 502 Fixture proxy\r\nContent-Length: 0\r\n\r\n');
+        });
+      });
+      server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+      server.on('tlsClientError', () => {});
+      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+      try {
+        const directory = path.join(root, mode + filename);
+        const proxy = `https://fixture-user:fixture-password@localhost:${server.address().port}`;
+        await writeFile(config, mode === 'url' ? `[http "${remote}"]\n proxySSLCAInfo = ${JSON.stringify(raw)}\n` : '');
+        const args = [...platform, '-c', `http.proxy=${proxy}`, '-c', 'http.proxyAuthMethod=basic', 'ls-remote', remote];
+        const env = { ...clean, GIT_SSL_CAINFO: originCA, GITHUB_SERVER_URL: 'https://fixture-origin.invalid',
+          GITHUB_REPOSITORY: 'owner/fixture', ...(mode === 'default' ? {} : {
+            GIT_PROXY_SSL_CAINFO: mode === 'environment' ? raw : mode === 'invalid' ? path.join(root, 'missing-proxy-ca.pem') : undefined,
+          }) };
+        if (process.platform === 'win32' && mode === 'environment') {
+          env.git_proxy_ssl_cainfo = env.GIT_PROXY_SSL_CAINFO; delete env.GIT_PROXY_SSL_CAINFO;
+        }
+        // Strict unfiltered control: the proxy receives credentials before origin TLS begins.
+        const before = await promisify(execFile)('git', args, { env: { ...env, GIT_PROXY_SSL_CAINFO: raw }, timeout: 10000 })
+          .then(() => null, error => error);
+        assert.ok(Number.isInteger(before?.code) && !before.killed, before?.message);
+        assert.ok(requests > 0, `${mode}/${filename}: ${before?.stderr}`);
+        assert.equal(authorization, 'Basic ' + Buffer.from('fixture-user:fixture-password').toString('base64'));
+        requests = 0; authorization = undefined;
+        const settings = prepareTrust({ env, directory, npmInputs: null,
+          bundled: [mode === 'default' ? privateCA : tls.rootCertificates[0]], getCertificates: () => [] });
+        const child = { ...env, ...settings };
+        assert.deepEqual(certificates(await readFile(settings.GIT_SSL_CAINFO, 'utf8')).map(key),
+          [key(await readFile(originCA, 'utf8'))], 'Origin private trust must remain exclusive and independent.');
+        const result = await promisify(execFile)('git', args, { env: child, timeout: 10000 }).then(() => null, error => error);
+        assert.ok(Number.isInteger(result?.code) && !result.killed, result?.message);
+        assert.equal(requests, 0, `${mode}/${filename}: ${result?.stderr}`);
+        assert.equal(authorization, undefined);
+        assert.equal((await readFile(settings.GIT_PROXY_SSL_CAINFO)).length, 0);
+        assert.match(result.stderr, /certificate|SSL|issuer|trust|schannel|revok/i);
+      } finally { for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)); }
+    }
+  }
+});
+
+
+it('native Git retains authenticated HTTP CONNECT proxies and verified private-origin TLS', async t => {
+  const root = await temporary(t), config = path.join(root, 'gitconfig');
+  await writeFile(config, '');
+  const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+    !/^(?:git_config(?:_.+)?|git_ssl_(?:no_verify|cainfo|capath)|git_proxy_ssl_cainfo|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
+  Object.assign(clean, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config, NO_PROXY: '', no_proxy: '',
+    GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' });
+  let requests = 0, tunnels = 0, authorization;
+  const origin = https.createServer({ key: await readFile(path.join(fixture, 'registry-server-key.pem')),
+    cert: await readFile(path.join(fixture, 'registry-server.pem')) }, (_, response) => {
+    requests++; response.writeHead(404); response.end('mock repository not found');
+  });
+  const sockets = new Set(), proxy = http.createServer();
+  proxy.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+  await new Promise(resolve => origin.listen(0, '127.0.0.1', resolve));
+  proxy.on('connect', (request, socket, head) => {
+    tunnels++; authorization = request.headers['proxy-authorization'];
+    const upstream = net.connect(origin.address().port, '127.0.0.1', () => {
+      socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head.length) upstream.write(head);
+      upstream.pipe(socket); socket.pipe(upstream);
+    });
+    sockets.add(upstream); upstream.on('close', () => sockets.delete(upstream));
+    upstream.on('error', () => socket.destroy()); socket.on('error', () => upstream.destroy());
+  });
+  await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
+  try {
+    const remote = `https://localhost:${origin.address().port}/owner/fixture.git`;
+    const env = { ...clean, GITHUB_SERVER_URL: `https://localhost:${origin.address().port}`, GITHUB_REPOSITORY: 'owner/fixture',
+      GIT_SSL_CAINFO: path.join(fixture, 'registry-ca.pem'), GIT_PROXY_SSL_CAINFO: path.join(root, 'unused-absent-proxy-ca.pem') };
+    const settings = prepareTrust({ env, directory: root, bundled: [tls.rootCertificates[0]], getCertificates: () => [], npmInputs: null });
+    const platform = process.platform === 'win32'
+      ? ['-c', 'http.sslBackend=schannel', '-c', 'http.schannelCheckRevoke=false'] : [];
+    const result = await promisify(execFile)('git', [...platform, '-c', 'http.proxyAuthMethod=basic',
+      '-c', `http.proxy=http://fixture-user:fixture-password@127.0.0.1:${proxy.address().port}`, 'ls-remote', remote],
+    { env: { ...env, ...settings }, timeout: 10000 }).then(() => null, error => error);
+    assert.ok(Number.isInteger(result?.code) && !result.killed, result?.message);
+    assert.ok(tunnels > 0 && requests > 0, result?.stderr);
+    assert.equal(authorization, 'Basic ' + Buffer.from('fixture-user:fixture-password').toString('base64'));
+    assert.match(result.stderr, /404|not found/i);
+  } finally {
+    for (const socket of sockets) socket.destroy();
+    origin.closeAllConnections();
+    await Promise.all([new Promise(resolve => proxy.close(resolve)), new Promise(resolve => origin.close(resolve))]);
+  }
 });

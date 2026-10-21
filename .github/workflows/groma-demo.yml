@@ -138,6 +138,7 @@ jobs:
             return {
               SSL_CERT_FILE: bundle, SSL_CERT_DIR: empty,
               NODE_EXTRA_CA_CERTS: bundle, NODE_USE_SYSTEM_CA: '0', NODE_TLS_REJECT_UNAUTHORIZED: '1',
+              GIT_PROXY_SSL_CAINFO: bundle + '.no-https-proxy',
               CURL_CA_BUNDLE: bundle, CARGO_HTTP_CAINFO: bundle,
               NPM_CONFIG_CAFILE: bundle, npm_config_cafile: bundle,
               NPM_CONFIG_STRICT_SSL: 'true', npm_config_strict_ssl: 'true',
@@ -223,6 +224,10 @@ jobs:
             const bundle = path.join(directory, 'ca.pem'), empty = path.join(directory, 'empty');
             fs.mkdirSync(empty, { recursive: true });
             fs.writeFileSync(bundle, pem);
+            // Git exposes no proxy CA-directory override. A filtered proxy CA file still
+            // trusts its system-directory fallback. Block HTTPS proxy TLS until it can be
+            // isolated; direct requests and HTTP proxies do not read this empty file.
+            fs.writeFileSync(bundle + '.no-https-proxy', '', { mode: 0o600 });
             const git = filteredGitTrust(env, directory, empty, read);
             const selectedNpm = npmInputs === undefined ? npmAuthorities({ env }) : npmInputs;
             const npmBundle = path.join(directory, 'npm-ca.pem');
@@ -231,7 +236,7 @@ jobs:
               NPM_CONFIG_CAFILE: npmBundle, npm_config_cafile: npmBundle };
             if (process.platform === 'win32') for (const alias of Object.keys(env)) {
               const canonical = alias.toUpperCase();
-              if (alias !== canonical && ['GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS'].includes(canonical)) settings[alias] = settings[canonical];
+              if (alias !== canonical && ['GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS', 'GIT_PROXY_SSL_CAINFO'].includes(canonical)) settings[alias] = settings[canonical];
             }
             return settings;
           }

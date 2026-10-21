@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T15:30:00Z'
+updated_date: '2026-10-21T16:11:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -90,4 +90,6 @@ Root review also reproduced native npm exclusive-CA widening: a configured priva
 Addressed all3 Codex code-review findings from88b655. Bootstrap rejects any inherited case spelling/value of GIT_SSL_NO_VERIFY before proceeding. Composite build/publish now use current actions/github-script9.0.0 and the runner Node to prepare global trust without requiring PATH Node/npm; npm CA env fields remain untouched until setup-node and the native npm policy stage. v1 release advancement now selects the highest stable v1 semver across paginated releases, ignoring newer majors/drafts/prereleases and skipping older maintenance versions. Actual inline release-program tests exercise v2 coexistence, older-v1 rejection and pagination while retaining fixed-v1/non-forced writes and exact-source gates. All45 local Node tests,6 strict YAML files and diff checks pass; hosted exact-head checks and completed fresh reviews remain required.
 
 Final integration review: default checkout/publication Git CA policy is scoped to the exact credential-free GitHub repository URL forms. Native selected GitHub CA files/directories and explicit caller Git CA overrides are filtered separately without broadening private trust or replacing unrelated Git remote CA configuration. Appended separately quoted GIT_CONFIG_PARAMETERS enforce strict TLS above inherited command-scope overrides while retaining caller authentication. Real native Git regression proves former global CA override breaks an unrelated private remote and the scoped fix reaches its HTTP mock; selected GitHub and explicit-env private CAs also succeed. Current suite: 48 passed; incident leaves have validity guards plus unfiltered strict-TLS acceptance controls; CA-directory gap/renumbering and equals/apostrophe quoting covered. Independent Backlog agent production review found no blocker. Final hosted CI and code/security reviews remain required before publishing v1.2.2.
+
+Coordinated native HTTPS proxy review: real Git still accepted the emudhra proxy and sent fake Proxy-Authorization with a filtered private-only proxy CA file, because libcurl retains its separate system proxy CA-directory fallback and Git exposes no proxy CApath control. The hotfix now deliberately blocks native Git HTTPS proxy transport using an owned empty GIT_PROXY_SSL_CAINFO before CONNECT/authentication. Direct HTTPS and authenticated HTTP CONNECT proxies retain private-origin TLS; unused invalid caller proxy CA settings do not abort direct requests. Private HTTPS proxies are included in this temporary documented restriction. No unsupported proxy verification knobs or transport relay were introduced. Native unfiltered positive controls cover private and both incident proxy chains; guarded connections send zero CONNECT/authentication for all of them. New final hosted CI/reviews required.
 <!-- SECTION:NOTES:END -->
