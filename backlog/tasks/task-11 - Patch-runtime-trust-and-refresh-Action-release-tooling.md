@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T14:54:00Z'
+updated_date: '2026-10-21T15:04:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -42,8 +42,8 @@ The October 2026 CA compromise affects the Action and workflow network steps bef
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The Action and all workflow examples use patched Node/npm and current Action releases, with default Groma 0.7.4.
-- [ ] #2 Trust preparation excludes all twelve incident SPKIs while preserving private roots, strict TLS, inherited Git configuration and native npm custom CA configuration.
+- [x] #1 The Action and all workflow examples use patched Node/npm and current Action releases, with default Groma 0.7.4.
+- [x] #2 Trust preparation excludes all twelve incident SPKIs while preserving private roots, strict TLS, inherited Git configuration and native npm custom CA configuration.
 - [x] #3 Behavior/security tests and all six YAML files validate under patched Node; release instructions describe GitHub Release/Marketplace and the tested v1.2.2 major-tag move.
 - [ ] #4 One reviewable PR contains the recovered hotfix, with hosted checks, published Groma smoke and critical review required before release.
 <!-- AC:END -->
@@ -56,6 +56,8 @@ The October 2026 CA compromise affects the Action and workflow network steps bef
 5. Publish the reviewed tree after repository access is granted, fix hosted portability failures, and add the approved release-published v1 advancement after read-only checks and real Groma smoke.
 
 6. Close the demonstrated Git URL-specific sslVerify override in workflow and publisher HTTPS targets; prove both incident paths are rejected with an inherited exact-URL false setting, preserve auth/indexed settings, then rerun hosted gates.
+
+7. Preserve native npm exclusive CA policy with a distinct filtered npm bundle, resolving precedence through npm own configuration loader. Prove a separately trusted system authority cannot widen a configured private-only npm CA, then rerun hosted checks and reviews.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -82,4 +84,6 @@ Root review reproduced a URL-specific Git verification bypass: generic http.sslV
 Hosted df3a9ac Windows native Git fixture timed out10s with code=null; Linux/mac passed. The earlier assertion had no case/stderr, so no certificate rejection or source cause is claimed. Added fixture-only noninteractive settings and curl header tracing retained only in captured child stderr, emitted with filename/suffix/code/signal/request count on failure. All auth is fake fixture data. Kept10s bound and tightened requirement to a completed native Git exit; no timeout counts as a zero-request security pass. Close leftover fixture sockets on failure to permit diagnostics/cleanup. Actual Windows trace is the next gate before any substantive fix.
 
 Diagnostic Windows trace locates timeout in emudhra chain verification: private positive finishes; incident handshake completes and Schannel imports the private-only CA file, then stalls10s before any HTTP request. Appended existing terminal public ECC-G3/AAA roots to the served incident peer chains, retaining filtered client trust,10s deadline and completed certificate rejection/zeroHTTP assertions. This removes missing-issuer discovery from synthetic fixture construction. AIA/network lookup is a consistent inference from the stalled native verifier, not proven packet-level evidence; hosted Windows completed rejection remains required.
+
+Root review also reproduced native npm exclusive-CA widening: a configured private-only cafile rejected a second authority with0HTTP, while the combined Action bundle accepted it with3HTTP. The Action now resolves effective CA precedence through the installed native npm configuration loader and writes a distinct filtered npm bundle; default Node/GitHub trust stays separate. npm installs use NPM_CONFIG_CAFILE explicitly, preserving native auth/registry/proxy resolution. Actual npm controls now reject the unselected authority with0HTTP, accept the selected private CA, and verify the other authority works only in the global-bundle control. Tests cover higher-priority user inline CA over global cafile, env cafile over user CA, unreadable selected file rejection and ignored overridden unreadable file. All40 Node tests pass on patched Node26.12.1/npm12.2.0; six strict YAML files and diff checks pass. CLI source/defaults/release instructions are complete; AC4 remains pending final exact-head hosted checks, completed code/security review and published Groma0.7.4 smoke.
 <!-- SECTION:NOTES:END -->

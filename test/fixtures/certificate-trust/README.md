@@ -3,3 +3,7 @@
 `compromised-cas.json` contains public certificate variants from the [eMudhra incident](https://github.com/galadran/we-have-a-problem.com), including the twelve blocked intermediate and ancestor keys and their cross-sign paths.
 
 The registry CA, leaf and private key are test-only loopback fixtures. The two incident leaf chains use the same loopback key and exercise both compromised authentication paths; no intermediate private key is stored here. Tests require private-registry TLS to succeed and both incident chains to fail.
+
+## Exclusive npm trust policy
+
+`other-registry-ca.pem` and `other-registry-server.pem` provide a second test-only authority for the existing localhost server key. Its CA signing private key was discarded. Tests verify that global TLS trust in this authority does not widen npm's explicitly selected private-only CA policy.

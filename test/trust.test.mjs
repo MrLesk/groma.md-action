@@ -42,7 +42,7 @@ it('unions bundled, default, system, extra and configured private CAs and create
   await writeFile(custom, privateCA);
   const calls = [];
   const settings = prepareTrust({ directory: root, env: { SSL_CERT_FILE: custom }, bundled: [tls.rootCertificates[0]],
-    getCertificates: kind => { calls.push(kind); return [privateCA, incidents[0].pem]; }, npmInputs: [] });
+    getCertificates: kind => { calls.push(kind); return [privateCA, incidents[0].pem]; }, npmInputs: null });
   assert.deepEqual(calls, ['default', 'system', 'extra']);
   const actual = certificates(await readFile(settings.SSL_CERT_FILE, 'utf8'));
   assert.equal(actual.length, 2);
@@ -51,14 +51,19 @@ it('unions bundled, default, system, extra and configured private CAs and create
   assert.equal(settings.NODE_EXTRA_CA_CERTS, settings.SSL_CERT_FILE);
 });
 
-it('asks native npm for global-context cafile and CA settings without replacing auth/proxy handling', () => {
-  const calls = [];
-  const actual = npmAuthorities({ env: { token: 'kept' }, query: (args, options) => {
-    calls.push(args); assert.equal(options.env.token, 'kept');
-    return args[2] === 'cafile' ? '/custom/npm.pem' : JSON.stringify([privateCA]);
-  }, read: filename => { assert.equal(filename, '/custom/npm.pem'); return privateCA; } });
-  assert.deepEqual(calls, [['config', 'get', 'cafile', '--global'], ['config', 'get', 'ca', '--global', '--json']]);
-  assert.deepEqual(actual, [privateCA, privateCA]);
+it('uses native npm precedence when user inline CA replaces global cafile and env cafile replaces user CA', async t => {
+  const root = await temporary(t), global = path.join(root, 'global.npmrc'), user = path.join(root, 'user.npmrc');
+  const cafile = path.join(root, 'corporate-ca.pem');
+  await writeFile(cafile, privateCA);
+  await writeFile(global, `cafile=${cafile}\n`);
+  await writeFile(user, `ca=${JSON.stringify(tls.rootCertificates[0])}\n`);
+  const env = { ...process.env, NPM_CONFIG_GLOBALCONFIG: global, NPM_CONFIG_USERCONFIG: user };
+  for (const k of Object.keys(env)) if (/^npm_config_(cafile|ca)$/i.test(k)) delete env[k];
+  assert.deepEqual(npmAuthorities({ env }).map(key), [key(tls.rootCertificates[0])]);
+  assert.deepEqual(npmAuthorities({ env: { ...env, NPM_CONFIG_CAFILE: cafile } }).map(key), [key(privateCA)]);
+  // An overridden, unreadable lower-priority file is not the selected trust policy.
+  await writeFile(global, `cafile=${path.join(root, 'absent')}\n`);
+  assert.deepEqual(npmAuthorities({ env }).map(key), [key(tls.rootCertificates[0])]);
 });
 
 it('preserves a real native npm global custom cafile and rejects unreadable configured CAs', async t => {
@@ -68,7 +73,44 @@ it('preserves a real native npm global custom cafile and rejects unreadable conf
   const env = { ...process.env, NPM_CONFIG_GLOBALCONFIG: global, NPM_CONFIG_USERCONFIG: user };
   for (const k of Object.keys(env)) if (/^npm_config_(cafile|ca)$/i.test(k)) delete env[k];
   assert.ok(npmAuthorities({ env }).some(pem => key(pem) === key(privateCA)));
-  assert.throws(() => npmAuthorities({ query: args => args[2] === 'cafile' ? path.join(root, 'absent') : 'null' }), /ENOENT/);
+  assert.throws(() => npmAuthorities({ env: { ...env, NPM_CONFIG_CAFILE: path.join(root, 'absent') } }), /CA configuration/);
+});
+
+it('native npm preserves a private-only CA policy even when global TLS trusts another authority', async t => {
+  const root = await temporary(t), global = path.join(root, 'global.npmrc'), user = path.join(root, 'user.npmrc');
+  await writeFile(global, `cafile=${path.join(fixture, 'registry-ca.pem')}\n`);
+  await writeFile(user, '');
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+    !/^(?:npm_config_(?:ca|cafile)|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
+  Object.assign(env, { NPM_CONFIG_GLOBALCONFIG: global, NPM_CONFIG_USERCONFIG: user,
+    NO_PROXY: 'localhost,127.0.0.1', no_proxy: 'localhost,127.0.0.1' });
+  const settings = prepareTrust({ env, directory: root,
+    bundled: [await readFile(path.join(fixture, 'other-registry-ca.pem'), 'utf8')], getCertificates: () => [] });
+  assert.deepEqual(certificates(await readFile(settings.NPM_CONFIG_CAFILE, 'utf8')).map(key), [key(privateCA)]);
+  for (const [filename, cafile, accepted] of [
+    ['registry-server.pem', settings.NPM_CONFIG_CAFILE, true],
+    ['other-registry-server.pem', settings.NPM_CONFIG_CAFILE, false],
+    ['other-registry-server.pem', settings.SSL_CERT_FILE, true], // Control: the global bundle can authenticate this server.
+  ]) {
+    let requests = 0;
+    const server = https.createServer({ key: await readFile(path.join(fixture, 'registry-server-key.pem')),
+      cert: await readFile(path.join(fixture, filename)) }, (_, response) => {
+      requests++; response.writeHead(404, { 'Content-Type': 'application/json' }); response.end('{"error":"fixture not found"}');
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      let invocation;
+      runNpm(['view', 'fixture-policy-proof', 'name', '--strict-ssl=true', `--cafile=${cafile}`,
+        `--registry=https://localhost:${server.address().port}`, '--fetch-retries=0', '--fetch-timeout=5000',
+        `--cache=${path.join(root, filename + accepted)}`], env,
+      { execute: (...args) => { invocation = args; } });
+      const result = await promisify(execFile)(invocation[0], invocation[1], { ...invocation[2], timeout: 10000,
+        stdio: undefined }).then(() => null, error => error);
+      assert.equal(typeof result?.code, 'number', `npm must complete: ${result?.message}`);
+      if (accepted) { assert.ok(requests > 0, result.stderr); assert.match(result.stderr, /E404/); }
+      else { assert.equal(requests, 0); assert.match(result.stderr, /certificate|issuer/i); }
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+  }
 });
 
 it('preserves inherited Git settings and enforces Schannel CA-file use, strict TLS and empty trust fallbacks', () => {
@@ -110,12 +152,13 @@ it('exports safe workflow settings without forbidden NODE_OPTIONS or environment
 });
 
 it('installs current npm before the exact Groma pin using native npm with explicit strict TLS', () => {
-  const calls = [], settings = trustSettings('/private filtered.pem', '/empty');
+  const calls = [], settings = { ...trustSettings('/global.pem', '/empty'),
+    NPM_CONFIG_CAFILE: '/private filtered.pem', npm_config_cafile: '/private filtered.pem' };
   installGroma('0.7.4', settings, { env: { HTTPS_PROXY: 'http://proxy.example', NPM_TOKEN: 'preserved', GIT_SSL_NO_VERIFY: 'false', git_ssl_no_verify: '1' },
     execute: (args, env) => { calls.push(args); assert.equal(env.HTTPS_PROXY, 'http://proxy.example');
       assert.equal(env.NPM_TOKEN, 'preserved'); assert.equal(env.NODE_OPTIONS, '--use-openssl-ca');
       assert.equal(Object.keys(env).some(key => key.toUpperCase() === 'GIT_SSL_NO_VERIFY'), false); } });
-  assert.deepEqual(calls, [installArguments('npm@12.2.0', settings.SSL_CERT_FILE), installArguments('groma.md@0.7.4', settings.SSL_CERT_FILE)]);
+  assert.deepEqual(calls, [installArguments('npm@12.2.0', settings.NPM_CONFIG_CAFILE), installArguments('groma.md@0.7.4', settings.NPM_CONFIG_CAFILE)]);
   for (const args of calls) { assert.ok(args.includes('--strict-ssl=true')); assert.ok(args.includes('--cafile=/private filtered.pem')); }
   assert.throws(() => installArguments('groma.md@0.7.4;echo unsafe', 'ca'));
   const executions = [];

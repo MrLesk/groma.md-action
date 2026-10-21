@@ -5,7 +5,7 @@
 Run `npm run check` with Node 26.12.1 or newer and npm 12.2.0. Tests use their own temporary directories and run concurrently. CI also runs the root Action against an initialized JavaScript/TypeScript fixture and verifies the exported sources.
 
 - `action.yml` and `prepare.mjs`: build inputs, runtime setup and the scanner cache.
-- `trust-bootstrap.cjs` and `prepare-trust.mjs`: offline CA preparation and strict native npm installation. Keep the inline workflow bootstraps identical to the shared source; the regression suite checks them.
+- `trust-bootstrap.cjs` and `prepare-trust.mjs`: offline CA preparation and strict native npm installation. npm's own configuration loader resolves its selected CA policy into a separate filtered bundle. Keep the inline workflow bootstraps identical to the shared source; the regression suite checks them.
 - `comparison.mjs`: exports committed revisions with scanner hooks disabled and reads Groma's change counts.
 - `publish/action.yml` and `publish/publish.mjs`: retained Pages previews and the PR comment.
 - `examples/pull-request.yml`: connects the read-only build to the separate publisher.

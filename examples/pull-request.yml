@@ -77,13 +77,43 @@ jobs:
               { env, encoding: 'utf8', shell: process.platform === 'win32' }).trim();
           }
 
-          function npmAuthorities({ env = process.env, query = nativeNpm, read = fs.readFileSync } = {}) {
-            // Ask npm to resolve env/user/global configuration itself, including custom prefixes.
-            // --global matches the install context and ignores checkout-supplied project npmrc settings.
-            const cafile = query(['config', 'get', 'cafile', '--global'], { env });
-            const ca = JSON.parse(query(['config', 'get', 'ca', '--global', '--json'], { env }));
-            return [...(cafile && cafile !== 'null' && cafile !== 'undefined' ? [read(cafile, 'utf8')] : []),
-              ...(Array.isArray(ca) ? ca : ca ? [ca] : [])];
+          function npmCLI({ env = process.env, query = nativeNpm, exists = fs.existsSync } = {}) {
+            const root = query(['root', '--global'], { env });
+            const candidates = [path.join(root, 'npm', 'bin', 'npm-cli.js'),
+              path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js'),
+              path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js')];
+            const cli = candidates.find(candidate => exists(candidate));
+            if (!cli) throw new Error('Cannot locate the native npm CLI.');
+            return cli;
+          }
+
+          function npmAuthorities({ env = process.env } = {}) {
+            const cli = npmCLI({ env });
+            // Resolve the same effective CA as native npm, including precedence between ca
+            // and cafile across configuration sources. Print only public CA certificates.
+            const source = `
+              const fs = require('node:fs');
+              const path = require('node:path');
+              const root = process.argv[1];
+              const Config = require(path.join(root, 'node_modules/@npmcli/config'));
+              const { definitions, flatten, shorthands, nerfDarts } = require(path.join(root, 'node_modules/@npmcli/config/lib/definitions'));
+              const config = new Config({ npmPath: root, definitions, flatten, shorthands, nerfDarts,
+                argv: [process.execPath, path.join(root, 'bin/npm-cli.js'), '--global'], warn: false });
+              config.load().then(() => {
+                // npm silently ignores unreadable cafiles. Reject that only when the file
+                // is the effective selection; a later inline CA can legitimately replace it.
+                let selectedFile;
+                for (const { data } of config.data.values()) for (const key of Object.keys(data)) {
+                  if (key === 'ca') selectedFile = undefined;
+                  else if (key === 'cafile' && data[key]) selectedFile = data[key];
+                }
+                if (selectedFile) fs.readFileSync(selectedFile);
+                console.log(JSON.stringify(config.flat.ca ?? null));
+              }).catch(() => { console.error('Cannot read native npm CA configuration.'); process.exitCode = 1; });
+            `;
+            const value = JSON.parse(execFileSync(process.execPath,
+              ['-e', source, path.resolve(path.dirname(cli), '..')], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+            return value === null ? null : Array.isArray(value) ? value : [value];
           }
 
           function trustSettings(bundle, empty, env = process.env) {
@@ -123,15 +153,17 @@ jobs:
             directory = fs.mkdtempSync(path.join(env.RUNNER_TEMP || os.tmpdir(), 'groma-tls-')) } = {}) {
             const inputs = [...bundled];
             if (getCertificates) for (const kind of ['default', 'system', 'extra']) inputs.push(...getCertificates(kind));
-            for (const key of ['SSL_CERT_FILE', 'NODE_EXTRA_CA_CERTS', 'NPM_CONFIG_CAFILE', 'npm_config_cafile']) {
+            for (const key of ['SSL_CERT_FILE', 'NODE_EXTRA_CA_CERTS']) {
               if (env[key]) inputs.push(read(env[key], 'utf8'));
             }
-            inputs.push(...(npmInputs ?? npmAuthorities({ env, read })));
             const pem = filterAuthorities(inputs);
             const bundle = path.join(directory, 'ca.pem'), empty = path.join(directory, 'empty');
             fs.mkdirSync(empty, { recursive: true });
             fs.writeFileSync(bundle, pem);
-            return trustSettings(bundle, empty, env);
+            const selectedNpm = npmInputs === undefined ? npmAuthorities({ env }) : npmInputs;
+            const npmBundle = path.join(directory, 'npm-ca.pem');
+            fs.writeFileSync(npmBundle, selectedNpm === null ? pem : filterAuthorities(selectedNpm));
+            return { ...trustSettings(bundle, empty, env), NPM_CONFIG_CAFILE: npmBundle, npm_config_cafile: npmBundle };
           }
 
           function exportSettings(settings, filename) {
