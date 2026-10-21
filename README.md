@@ -31,7 +31,7 @@ For a repository without a Pages site, set the Pages source to **GitHub Actions*
 ```yaml
 - uses: MrLesk/groma.md-action@v1
   with:
-    groma-version: '0.7.0'
+    groma-version: '0.7.3'
     output: site # your built site
     theme: blueprint
 ```
@@ -42,7 +42,7 @@ The Action requires Groma 0.7 or newer. It lets the CLI convert an existing `sca
 
 | Input | Default | Meaning |
 | --- | --- | --- |
-| `groma-version` | `0.7.0` | Groma CLI version; pin it to control reader upgrades |
+| `groma-version` | `0.7.3` | Groma CLI version; pin it to control reader upgrades |
 | `output` | `groma-site` | Website root, relative to the checkout |
 | `theme` | `auto` | `auto`, `light`, `dark` or `blueprint` |
 | `exclude` | | Extra scan exclusions, one per line; not for comparisons |
@@ -55,6 +55,12 @@ The Action requires Groma 0.7 or newer. It lets the CLI convert an existing `sca
 | `directory` | The map, at `<output>/architecture/<theme>/` |
 | `summary` | Comparison JSON with the change counts; empty without `from` |
 
-The default is Groma 0.7.0. `@v1` follows Action releases, which can change that default. Set `groma-version` to an exact release to keep reader upgrades explicit.
+The default is Groma 0.7.3. `@v1` follows Action releases, which can change that default. Set `groma-version` to an exact release to keep reader upgrades explicit.
 
 Both comparison commits must contain architecture that the selected Groma version can read. After a format change, update an older PR from its base branch so its merge base and head use the current format. Choosing a version does not convert committed architecture.
+
+## TLS trust during installation
+
+The Action uses Node 26.12.1 and npm 12.2.0. Before its network steps it combines bundled, system, extra and native npm custom CAs, removes the twelve incident keys, and keeps strict TLS enabled. Native npm retains authentication, proxy and registry configuration. Private CA roots and existing Git settings are preserved.
+
+The examples prepare the same filtered trust before checkout or GitHub API calls. Keep that first step and the workflow `NODE_OPTIONS` setting when adapting them. The GitHub runner prepares Action archives before job steps; that earlier phase depends on the runner vendor's trust updates.

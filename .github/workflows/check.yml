@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NODE_OPTIONS: --use-openssl-ca
+
 jobs:
   check:
     name: check-${{ matrix.os }}
@@ -18,10 +21,115 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v7
+      - &prepare-trust
+        name: Prepare filtered trust before network steps
+        shell: bash
+        run: |
+          node <<'NODE'
+          // Keep the inline workflow bootstraps identical to this offline trust preparation.
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const os = require('node:os');
+          const tls = require('node:tls');
+          const { X509Certificate, createHash } = require('node:crypto');
+          const { execFileSync } = require('node:child_process');
+          const blockedSPKI = new Set([
+            "0a6c2b2ca5b364207954171987ac9d2178561569d8205457e77ca90c32ede282",
+            "43bffa19d6ef651451f6841e019931e96f6f2eaeff28ab4b6f1ce4576de2717b",
+            "49dd353dc2b919a3770645117d0e60c16115e7d1bc259eefe734b00ea434fe5f",
+            "5c0660a2b164910d8ff589c18e14552e9e0ec237dcefe2cb736d41a4811f81a0",
+            "63ecefee431d49523bc1136c4e72d0206a477086caf606cd5cf025686c109cf8",
+            "8d417db2dd8bf5e3084d1e3f196d583849d81bdd4c00c70b9d39369e96b8c782",
+            "92c063d67e8f14db71d288e11266ffdaf69cbf115f7bab14f3bc2f68d25e0e30",
+            "bd153ed7b0434f6886b17bce8bbe84ed340c7132d702a8f4fa318f756ecbd6f3",
+            "c619e4780ed8e0abeda24ad732567de4383a7ea941338f6d1a7d1b49ac792fe9",
+            "e0254c7fcdc265e2f0f8a428dabb75ab4ae039b4872d62f5ee57f0877d5a8a41",
+            "ebed6475c2c2d80fcb199f3fe8dd6e6b3ce60b77eb15d4e42c3dec0c6f5b5105",
+            "ec4ffa1ad0ac88081314b7aaffef6a91f97cd57291bb5ba686c5415f5eb4f6b6"
+          ]);
+
+          function filterAuthorities(inputs) {
+            const certificates = new Map();
+            for (const input of inputs.flat(Infinity)) {
+              if (!input || !String(input).trim()) continue;
+              const matches = String(input).match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
+              if (!matches) throw new Error('Configured CA input contains no PEM certificates.');
+              for (const pem of matches) {
+                const certificate = new X509Certificate(pem);
+                const key = createHash('sha256').update(certificate.publicKey.export({ type: 'spki', format: 'der' })).digest('hex');
+                if (!blockedSPKI.has(key)) certificates.set(certificate.fingerprint256, certificate.toString());
+              }
+            }
+            if (!certificates.size) throw new Error('No trusted certificate authorities remain.');
+            return [...certificates.values()].join('\n') + '\n';
+          }
+
+          function nativeNpm(args, { env = process.env, execute = execFileSync } = {}) {
+            // Only fixed config/root queries use Windows' command wrapper; install arguments never use a shell.
+            return execute(process.platform === 'win32' ? 'npm.cmd' : 'npm', args,
+              { env, encoding: 'utf8', shell: process.platform === 'win32' }).trim();
+          }
+
+          function npmAuthorities({ env = process.env, query = nativeNpm, read = fs.readFileSync } = {}) {
+            // Ask npm to resolve env/user/global configuration itself, including custom prefixes.
+            // --global matches the install context and ignores checkout-supplied project npmrc settings.
+            const cafile = query(['config', 'get', 'cafile', '--global'], { env });
+            const ca = JSON.parse(query(['config', 'get', 'ca', '--global', '--json'], { env }));
+            return [...(cafile && cafile !== 'null' && cafile !== 'undefined' ? [read(cafile, 'utf8')] : []),
+              ...(Array.isArray(ca) ? ca : ca ? [ca] : [])];
+          }
+
+          function trustSettings(bundle, empty, env = process.env) {
+            const raw = env.GIT_CONFIG_COUNT ?? '0';
+            if (!/^(0|[1-9][0-9]*)$/.test(raw) || !Number.isSafeInteger(Number(raw) + 2)) {
+              throw new Error('Invalid GIT_CONFIG_COUNT.');
+            }
+            const count = Number(raw);
+            return {
+              SSL_CERT_FILE: bundle, SSL_CERT_DIR: empty,
+              NODE_EXTRA_CA_CERTS: bundle, NODE_USE_SYSTEM_CA: '0', NODE_TLS_REJECT_UNAUTHORIZED: '1',
+              GIT_SSL_CAINFO: bundle, GIT_SSL_CAPATH: empty,
+              CURL_CA_BUNDLE: bundle, CARGO_HTTP_CAINFO: bundle,
+              NPM_CONFIG_CAFILE: bundle, npm_config_cafile: bundle,
+              NPM_CONFIG_STRICT_SSL: 'true', npm_config_strict_ssl: 'true',
+              GIT_CONFIG_COUNT: String(count + 2),
+              [`GIT_CONFIG_KEY_${count}`]: 'http.schannelUseSSLCAInfo', [`GIT_CONFIG_VALUE_${count}`]: 'true',
+              [`GIT_CONFIG_KEY_${count + 1}`]: 'http.sslVerify', [`GIT_CONFIG_VALUE_${count + 1}`]: 'true',
+            };
+          }
+
+          function prepareTrust({ env = process.env, bundled = tls.rootCertificates,
+            getCertificates = tls.getCACertificates?.bind(tls), npmInputs, read = fs.readFileSync,
+            directory = fs.mkdtempSync(path.join(env.RUNNER_TEMP || os.tmpdir(), 'groma-tls-')) } = {}) {
+            const inputs = [...bundled];
+            if (getCertificates) for (const kind of ['default', 'system', 'extra']) inputs.push(...getCertificates(kind));
+            for (const key of ['SSL_CERT_FILE', 'NODE_EXTRA_CA_CERTS', 'NPM_CONFIG_CAFILE', 'npm_config_cafile']) {
+              if (env[key]) inputs.push(read(env[key], 'utf8'));
+            }
+            inputs.push(...(npmInputs ?? npmAuthorities({ env, read })));
+            const pem = filterAuthorities(inputs);
+            const bundle = path.join(directory, 'ca.pem'), empty = path.join(directory, 'empty');
+            fs.mkdirSync(empty, { recursive: true });
+            fs.writeFileSync(bundle, pem);
+            return trustSettings(bundle, empty, env);
+          }
+
+          function exportSettings(settings, filename) {
+            if (!filename) throw new Error('GITHUB_ENV is required.');
+            if (Object.hasOwn(settings, 'NODE_OPTIONS') || Object.values(settings).some(value => /[\r\n]/.test(value))) {
+              throw new Error('Invalid workflow environment setting.');
+            }
+            fs.appendFileSync(filename, Object.entries(settings).map(([key, value]) => `${key}=${value}\n`).join(''));
+          }
+
+          exportSettings(prepareTrust(), process.env.GITHUB_ENV);
+          NODE
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
-          node-version: '24'
+          node-version: 26.12.1
+      - name: Use current npm
+        run: npm install --global npm@12.2.0 --strict-ssl=true
       - run: npm run check
 
   release-smoke:
@@ -30,9 +138,18 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - *prepare-trust
+      - uses: actions/checkout@v7.0.1
         with:
           path: .action
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 26.12.1
+      - name: Require the published Groma hotfix
+        shell: bash
+        run: |
+          npm install --global npm@12.2.0 --strict-ssl=true
+          test "$(npm view groma.md@0.7.3 version --strict-ssl=true)" = "0.7.3"
 
       - name: Prepare initialized project fixture
         shell: bash
@@ -57,7 +174,7 @@ jobs:
 
       - name: Verify the default Groma version and project upgrade
         run: |
-          test "$(groma --version)" = "0.7.0"
+          test "$(groma --version)" = "0.7.3"
           test -f groma/config.json
           test ! -e groma/scanners.json
 
@@ -101,13 +218,13 @@ jobs:
         id: comparison
         uses: ./.action
         with:
-          groma-version: '0.7.0'
+          groma-version: '0.7.3'
           output: comparison-site
           from: ${{ steps.commits.outputs.from }}
           revision: ${{ steps.commits.outputs.revision }}
 
       - name: Verify the selected Groma version
-        run: test "$(groma --version)" = "0.7.0"
+        run: test "$(groma --version)" = "0.7.3"
 
       - name: Verify committed comparison
         env:
