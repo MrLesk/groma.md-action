@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T16:53:00Z'
+updated_date: '2026-10-21T17:49:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -37,65 +37,19 @@ ordinal: 11000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-The October 2026 CA compromise affects the Action and workflow network steps before the Groma CLI can run. Recover the unpublished security hotfix after workspace loss, preserve custom/private CA and npm configuration, and prepare a locally verified release without bypassing the unavailable repository installation.
+Update Action runtimes and certificate validation while preserving supported private CA configuration and authentication.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [x] #1 The Action and all workflow examples use patched Node/npm and current Action releases, with default Groma 0.7.4.
-- [x] #2 Trust preparation excludes all twelve incident SPKIs while preserving private roots, strict TLS, inherited Git configuration and native npm custom CA configuration.
-- [x] #3 Behavior/security tests and all six YAML files validate under patched Node; release instructions describe GitHub Release/Marketplace and the tested v1.2.2 major-tag move.
-- [ ] #4 One reviewable PR contains the recovered hotfix, with hosted checks, published Groma smoke and critical review required before release.
+- [ ] #1 The Action and workflow examples use patched Node/npm and current Action releases, with default Groma0.7.5.
+- [ ] #2 Certificate validation excludes compromised keys while preserving supported private CA settings, authentication and inherited Git configuration.
+- [ ] #3 Native compatibility and certificate rejection tests pass on Linux, macOS and Windows, and workflow YAML validates.
+- [ ] #4 The GitHub Release workflow verifies the published CLI and advances only the supported major Action tag after checks pass.
 <!-- AC:END -->
 
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-1. Read the project and Backlog workflow guidance and recover pinned runtime/key/fixture inputs. 2. Add offline CA filtering and strict npm setup, then wire it before workflow network steps and update runtime/action/CLI versions. 3. Add meaningful security/compatibility regressions, validate Node tests and six YAML files, and document coordinated release. 4. Finalize TASK-11 and commit locally without attempting remote writes.
-
-5. Publish the reviewed tree after repository access is granted, fix hosted portability failures, and add the approved release-published v1 advancement after read-only checks and real Groma smoke.
-
-6. Close the demonstrated Git URL-specific sslVerify override in workflow and publisher HTTPS targets; prove both incident paths are rejected with an inherited exact-URL false setting, preserve auth/indexed settings, then rerun hosted gates.
-
-7. Preserve native npm exclusive CA policy with a distinct filtered npm bundle, resolving precedence through npm own configuration loader. Prove a separately trusted system authority cannot widen a configured private-only npm CA, then rerun hosted checks and reviews.
+Update runtime and CLI defaults, filter compromised authorities, preserve native Git and npm trust settings, and verify supported behavior across operating systems before release.
 <!-- SECTION:PLAN:END -->
-
-## Implementation Notes
-
-<!-- SECTION:NOTES:BEGIN -->
-Recovered from clean base ea7042367a573e3b07ae00437767df04bcf284f2 into /tmp/groma-action-hotfix-recovery. The restored Node 26.12.1 archive matched independently verified SHA256 6170b2d474e1c626f43cff3adc118df9fe3b573258a4fc3d850c8dbc6b079bbd; tools remain under /tmp/action-hotfix-tools. All 38 Node tests passed, including twelve-key filtering, private CA preservation/deduplication, empty/malformed trust rejection, real native npm global cafile resolution, inherited Git settings/Schannel opt-in, strict npm arguments, and private-loopback HTTPS success with both incident chains rejected. An actual Git config subprocess also proved inherited values and strict Schannel settings. All six YAML files passed duplicate-key validation, current action/runtime pins, offline-first trust placement, and composite NODE_OPTIONS checks. Check's npm/CLI smoke is gated on PR draft readiness and explicit registry publication of Groma 0.7.3. git diff --check passed.
-
-GitHub installation 113376443 excludes MrLesk/groma.md-action and previously returned 403. No push, PR, alternative credential or write fallback was attempted. Hosted Check and the real published Groma smoke remain required after access is restored; GitHub Release/Marketplace v1.2.2 and moving v1 follow those gates.
-
-Security review corrected a Git environment mistake: any GIT_SSL_NO_VERIFY value, including false, disables verification. Removed it entirely from trustSettings and all four inline bootstraps; no empty GITHUB_ENV replacement is written. Explicit installer, comparison and publisher child environments omit inherited case variants of that variable. Publisher authentication now validates and appends to inherited GIT_CONFIG_COUNT instead of discarding Schannel/sslVerify entries. Regression coverage uses only fake auth values.
-
-All 39 Node tests pass. The new native Git HTTPS regression uses one isolated config for the private CA and both compromised chains: the private CA reaches the mock404; both incident chains reach zero HTTP requests. Windows-only fixture options select Schannel and disable synthetic-leaf revocation lookup because GIT_CONFIG_NOSYSTEM hides backend selection; production revocation policy is unchanged. A mutation control restoring the old false-valued export caused native Git to reach the compromised mock and the regression failed as required. All six YAML files pass strict duplicate-key validation and git diff --check passes. GitHub access remains blocked; no push or fallback was attempted.
-
-Repository access is now enabled and draft PR10 is open. Initial hosted checks exposed fixture isolation/portability mistakes: the native Git fixture inherited the parent count after removing parent indexed entries; Windows source matching needed CRLF normalization and a path assertion needed native separators. Fixed these test inputs without changing TLS requirements. All39 tests pass locally with the actual two-entry hosted Git environment reproduced; hosted rerun remains required.
-
-Approved release support now extends the existing Check workflow: stable published v1.x.y releases test the exact commit in the read-only matrix and real npm CLI smoke, then an isolated contents-write job advances only v1 through a non-forced API ref update. It dereferences annotated version tags, checks the tested SHA and latest stable release, and serializes advancement. Full version tags are never written. Local39 tests, strict YAML parsing and the inline Node release-script syntax check pass; hosted candidate checks remain the gate.
-
-Hosted fixture-fix head c87a074 passed all three OS39-test jobs. Repository access is restored; PR10 remains draft while Groma publication and the newly requested cross-project critical review are pending. Approved release-tag changes have been locally reviewed for fixed v1 write targets, exact-SHA read-only gates, strict stable version validation and non-forced latest-release advancement.
-
-Target changed to Groma0.7.4 after the fresh audit found a JVM trust-store copy isolation defect in the unpublished0.7.3 candidate. Updated Action defaults, documentation, examples and real npm smoke gate. Released tags are unchanged; the Action remains draft until the corrected CLI is published and review/checks pass.
-
-Root review reproduced a URL-specific Git verification bypass: generic http.sslVerify=true lost to an inherited exact-repository sslVerify=false, and native Git reached the compromised eMudhra mock before the fix. Trust preparation now appends strict exact repository URL settings for both checkout and publisher URL forms, preserving inherited indexed configuration. Six native cases cover private CA success with publisher fake authentication preserved and zero HTTP requests through both incident paths, with and without .git. All39 Node tests,6 strict YAML files and git diff --check pass. Hosted exact-head checks and the published Groma0.7.4 smoke remain required. The obsolete final summary was cleared; earlier access-blocked/0.7.3 notes are historical.
-
-Hosted df3a9ac Windows native Git fixture timed out10s with code=null; Linux/mac passed. The earlier assertion had no case/stderr, so no certificate rejection or source cause is claimed. Added fixture-only noninteractive settings and curl header tracing retained only in captured child stderr, emitted with filename/suffix/code/signal/request count on failure. All auth is fake fixture data. Kept10s bound and tightened requirement to a completed native Git exit; no timeout counts as a zero-request security pass. Close leftover fixture sockets on failure to permit diagnostics/cleanup. Actual Windows trace is the next gate before any substantive fix.
-
-Diagnostic Windows trace locates timeout in emudhra chain verification: private positive finishes; incident handshake completes and Schannel imports the private-only CA file, then stalls10s before any HTTP request. Appended existing terminal public ECC-G3/AAA roots to the served incident peer chains, retaining filtered client trust,10s deadline and completed certificate rejection/zeroHTTP assertions. This removes missing-issuer discovery from synthetic fixture construction. AIA/network lookup is a consistent inference from the stalled native verifier, not proven packet-level evidence; hosted Windows completed rejection remains required.
-
-Root review also reproduced native npm exclusive-CA widening: a configured private-only cafile rejected a second authority with0HTTP, while the combined Action bundle accepted it with3HTTP. The Action now resolves effective CA precedence through the installed native npm configuration loader and writes a distinct filtered npm bundle; default Node/GitHub trust stays separate. npm installs use NPM_CONFIG_CAFILE explicitly, preserving native auth/registry/proxy resolution. Actual npm controls now reject the unselected authority with0HTTP, accept the selected private CA, and verify the other authority works only in the global-bundle control. Tests cover higher-priority user inline CA over global cafile, env cafile over user CA, unreadable selected file rejection and ignored overridden unreadable file. All40 Node tests pass on patched Node26.12.1/npm12.2.0; six strict YAML files and diff checks pass. CLI source/defaults/release instructions are complete; AC4 remains pending final exact-head hosted checks, completed code/security review and published Groma0.7.4 smoke.
-
-Addressed all3 Codex code-review findings from88b655. Bootstrap rejects any inherited case spelling/value of GIT_SSL_NO_VERIFY before proceeding. Composite build/publish now use current actions/github-script9.0.0 and the runner Node to prepare global trust without requiring PATH Node/npm; npm CA env fields remain untouched until setup-node and the native npm policy stage. v1 release advancement now selects the highest stable v1 semver across paginated releases, ignoring newer majors/drafts/prereleases and skipping older maintenance versions. Actual inline release-program tests exercise v2 coexistence, older-v1 rejection and pagination while retaining fixed-v1/non-forced writes and exact-source gates. All45 local Node tests,6 strict YAML files and diff checks pass; hosted exact-head checks and completed fresh reviews remain required.
-
-Final integration review: default checkout/publication Git CA policy is scoped to the exact credential-free GitHub repository URL forms. Native selected GitHub CA files/directories and explicit caller Git CA overrides are filtered separately without broadening private trust or replacing unrelated Git remote CA configuration. Appended separately quoted GIT_CONFIG_PARAMETERS enforce strict TLS above inherited command-scope overrides while retaining caller authentication. Real native Git regression proves former global CA override breaks an unrelated private remote and the scoped fix reaches its HTTP mock; selected GitHub and explicit-env private CAs also succeed. Current suite: 48 passed; incident leaves have validity guards plus unfiltered strict-TLS acceptance controls; CA-directory gap/renumbering and equals/apostrophe quoting covered. Independent Backlog agent production review found no blocker. Final hosted CI and code/security reviews remain required before publishing v1.2.2.
-
-Coordinated native HTTPS proxy review: real Git still accepted the emudhra proxy and sent fake Proxy-Authorization with a filtered private-only proxy CA file, because libcurl retains its separate system proxy CA-directory fallback and Git exposes no proxy CApath control. The hotfix now deliberately blocks native Git HTTPS proxy transport using an owned empty GIT_PROXY_SSL_CAINFO before CONNECT/authentication. Direct HTTPS and authenticated HTTP CONNECT proxies retain private-origin TLS; unused invalid caller proxy CA settings do not abort direct requests. Private HTTPS proxies are included in this temporary documented restriction. No unsupported proxy verification knobs or transport relay were introduced. Native unfiltered positive controls cover private and both incident proxy chains; guarded connections send zero CONNECT/authentication for all of them. New final hosted CI/reviews required.
-
-Final native-proxy platform review: hosted Ubuntu Git 2.55 proved that an empty proxy CAfile can return zero imported anchors and still use the system CA directory. Replaced that policy with an unusable child path beneath an owned regular markerfile (ENOTDIR); no caller proxy CA path is read. Windows paired raw/guard controls use the real Git OpenSSL backend because Schannel can already revoke incident roots independently; additional Schannel guarded cases require the owned-path loader error, zero proxy HTTP/auth and no timeout. Direct HTTPS and authenticated HTTP CONNECT remain supported. 50 local Node tests and six strict YAML documents pass; final exact-head hosted/review/publication gates remain pending.
-
-Shared native-Git default-trust review: keep Node/npm policies separate from Git. Added a 9-line Git-specific OS-system fallback only for repository URL forms with no explicit selected Git CA file; explicit Git CA files/directories and unrelated remotes retain their filtered policies. A real NodeExtra-only private CA regression proves plain Git rejects the peer and the Action must also send zero HTTP/auth. Reverting only the production narrowing reproduces one authenticated HTTP request. Final local 51 Node tests pass; six strict YAML documents and diff check pass. New exact-head hosted matrices, Groma0.7.4 smoke and completed code/security reviews remain required. No backend-discovery framework or global runtime trust rewrite was added.
-
-Confirmed Git insteadOf sibling gap fixed with native ls-remote --get-url (no connection): select effective HTTP(S) destinations for the existing CA/default/strict settings, strip only four bundled curl-helper aliases, and omit rewritten passwords while preserving raw username spelling. SSH/local rewrites retain existing flow; actual checkout/push URL arguments and authentication scopes stay unchanged. New real normal/forced rewrite controls exercise both GitHub URL forms, private positive and both incident zero-HTTP negatives, raw equals/apostrophe username and password exclusion from exported settings. Reverting only effective-URL resolution reproduces one incident HTTP request. Final 52 local Node tests and six strict YAML documents pass; independent Groma-agent review found no concern. Hosted exact-head checks, CLI0.7.4 smoke and current reviews still gate release. No further exploratory source work is planned.
-<!-- SECTION:NOTES:END -->
