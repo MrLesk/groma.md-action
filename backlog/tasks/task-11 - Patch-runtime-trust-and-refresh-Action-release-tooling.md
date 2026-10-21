@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T14:08:00Z'
+updated_date: '2026-10-21T14:11:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -45,7 +45,7 @@ The October 2026 CA compromise affects the Action and workflow network steps bef
 - [x] #1 The Action and all workflow examples use patched Node/npm and current Action releases, with default Groma 0.7.3.
 - [x] #2 Trust preparation excludes all twelve incident SPKIs while preserving private roots, strict TLS, inherited Git configuration and native npm custom CA configuration.
 - [x] #3 Behavior/security tests and all six YAML files validate under patched Node; release instructions describe GitHub Release/Marketplace and the tested v1.2.2 major-tag move.
-- [x] #4 A clean committed local branch contains the recovered changes, with the GitHub repository access blocker documented and no push attempted.
+- [ ] #4 One reviewable PR contains the recovered hotfix, with hosted checks, published Groma smoke and critical review required before release.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -68,6 +68,10 @@ Security review corrected a Git environment mistake: any GIT_SSL_NO_VERIFY value
 All 39 Node tests pass. The new native Git HTTPS regression uses one isolated config for the private CA and both compromised chains: the private CA reaches the mock404; both incident chains reach zero HTTP requests. Windows-only fixture options select Schannel and disable synthetic-leaf revocation lookup because GIT_CONFIG_NOSYSTEM hides backend selection; production revocation policy is unchanged. A mutation control restoring the old false-valued export caused native Git to reach the compromised mock and the regression failed as required. All six YAML files pass strict duplicate-key validation and git diff --check passes. GitHub access remains blocked; no push or fallback was attempted.
 
 Repository access is now enabled and draft PR10 is open. Initial hosted checks exposed fixture isolation/portability mistakes: the native Git fixture inherited the parent count after removing parent indexed entries; Windows source matching needed CRLF normalization and a path assertion needed native separators. Fixed these test inputs without changing TLS requirements. All39 tests pass locally with the actual two-entry hosted Git environment reproduced; hosted rerun remains required.
+
+Approved release support now extends the existing Check workflow: stable published v1.x.y releases test the exact commit in the read-only matrix and real npm CLI smoke, then an isolated contents-write job advances only v1 through a non-forced API ref update. It dereferences annotated version tags, checks the tested SHA and latest stable release, and serializes advancement. Full version tags are never written. Local39 tests, strict YAML parsing and the inline Node release-script syntax check pass; hosted candidate checks remain the gate.
+
+Hosted fixture-fix head c87a074 passed all three OS39-test jobs. Repository access is restored; PR10 remains draft while Groma publication and the newly requested cross-project critical review are pending. Approved release-tag changes have been locally reviewed for fixed v1 write targets, exact-SHA read-only gates, strict stable version validation and non-forced latest-release advancement.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

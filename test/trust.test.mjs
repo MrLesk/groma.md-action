@@ -158,6 +158,23 @@ it('all four workflow entry points embed the exact offline bootstrap before netw
     assert.match(content, /NODE_OPTIONS: --use-openssl-ca/);
     assert.ok(content.indexOf('- &prepare-trust') < content.indexOf('uses:'));
   }
+  const check = (await readFile(new URL('../.github/workflows/check.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+  assert.match(check, /release:\n    types: \[published\]/);
+  assert.equal((check.match(/ref: \$\{\{ github\.sha \}\}/g) ?? []).length, 2);
+  const tagJob = check.split('\n  release-tag:\n')[1];
+  assert.match(tagJob, /needs: \[check, release-smoke\]/);
+  assert.match(tagJob, /!github.event.release.draft && !github.event.release.prerelease/);
+  assert.match(tagJob, /contents: write/);
+  assert.equal((check.match(/contents: write/g) ?? []).length, 1);
+  assert.match(tagJob, /cancel-in-progress: false/);
+  assert.match(tagJob, /object.sha !== process.env.GITHUB_SHA/);
+  assert.match(tagJob, /latest.id !== release.id/);
+  const allowedTag = new RegExp(tagJob.match(/!\/(.+)\/\.test\(release\.tag_name\)/)[1]);
+  for (const tag of ['v1.0.0', 'v1.2.2', 'v1.20.10']) assert.ok(allowedTag.test(tag));
+  for (const tag of ['v2.0.0', 'v1.02.2', 'v1.2.2-rc.1', 'v1.2.2/unsafe']) assert.equal(allowedTag.test(tag), false);
+  assert.match(tagJob, /api\('git\/refs\/tags\/v1', 'PATCH', \{ sha: object.sha, force: false \}\)/);
+  assert.match(tagJob, /ref: 'refs\/tags\/v1'/);
+  assert.doesNotMatch(tagJob, /force: true/);
 });
 
 
