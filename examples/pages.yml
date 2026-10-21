@@ -44,7 +44,7 @@ jobs:
             "ec4ffa1ad0ac88081314b7aaffef6a91f97cd57291bb5ba686c5415f5eb4f6b6"
           ]);
 
-          function filterAuthorities(inputs) {
+          function filterAuthorities(inputs, allowEmpty = false) {
             const certificates = new Map();
             for (const input of inputs.flat(Infinity)) {
               if (!input || !String(input).trim()) continue;
@@ -56,7 +56,10 @@ jobs:
                 if (!blockedSPKI.has(key)) certificates.set(certificate.fingerprint256, certificate.toString());
               }
             }
-            if (!certificates.size) throw new Error('No trusted certificate authorities remain.');
+            if (!certificates.size) {
+              if (allowEmpty) return '';
+              throw new Error('No trusted certificate authorities remain.');
+            }
             return [...certificates.values()].join('\n') + '\n';
           }
 
@@ -105,36 +108,104 @@ jobs:
             return value === null ? null : Array.isArray(value) ? value : [value];
           }
 
-          function trustSettings(bundle, empty, env = process.env) {
+          function gitEnvironmentValue(env, key) {
+            return env[key] ?? (process.platform === 'win32'
+              ? env[Object.keys(env).find(name => name.toUpperCase() === key)] : undefined);
+          }
+
+          function repositoryURLs(env) {
+            if (!env.GITHUB_SERVER_URL || !env.GITHUB_REPOSITORY) return [];
+            const repository = new URL(`${env.GITHUB_SERVER_URL.replace(/\/+$/, '')}/${env.GITHUB_REPOSITORY}`);
+            if (repository.username || repository.password) throw new Error('GitHub server URL must not contain credentials.');
+            return repository.protocol === 'https:' ? [repository.href, `${repository.href}.git`] : [];
+          }
+
+          function trustSettings(bundle, empty, env = process.env, selectedGit = []) {
             const git = [['http.schannelUseSSLCAInfo', 'true'], ['http.sslVerify', 'true']];
-            if (env.GITHUB_SERVER_URL && env.GITHUB_REPOSITORY) {
-              const repository = new URL(`${env.GITHUB_SERVER_URL.replace(/\/+$/, '')}/${env.GITHUB_REPOSITORY}`);
-              if (repository.username || repository.password) throw new Error('GitHub server URL must not contain credentials.');
-              if (repository.protocol === 'https:') {
-                // Git chooses URL-specific settings before generic ones, regardless of their order.
-                // checkout and the publisher use these two forms of the credential-free repository URL.
-                for (const url of [repository.href, `${repository.href}.git`]) {
-                  git.push([`http.${url}.sslVerify`, 'true'], [`http.${url}.schannelUseSSLCAInfo`, 'true']);
-                }
-              }
+            // Limit checkout/publication defaults to this repository. Other Git remotes
+            // retain their own CA policy, which Groma filters before scanner downloads.
+            for (const url of repositoryURLs(env)) {
+              git.push([`http.${url}.sslVerify`, 'true'], [`http.${url}.schannelUseSSLCAInfo`, 'true'],
+                [`http.${url}.sslCAInfo`, bundle], [`http.${url}.sslCAPath`, empty]);
             }
-            const raw = env.GIT_CONFIG_COUNT ?? '0';
+            git.push(...selectedGit);
+            const raw = gitEnvironmentValue(env, 'GIT_CONFIG_COUNT') ?? '0';
             if (!/^(0|[1-9][0-9]*)$/.test(raw) || !Number.isSafeInteger(Number(raw) + git.length)) {
               throw new Error('Invalid GIT_CONFIG_COUNT.');
             }
             const count = Number(raw);
+            const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
             return {
               SSL_CERT_FILE: bundle, SSL_CERT_DIR: empty,
               NODE_EXTRA_CA_CERTS: bundle, NODE_USE_SYSTEM_CA: '0', NODE_TLS_REJECT_UNAUTHORIZED: '1',
-              GIT_SSL_CAINFO: bundle, GIT_SSL_CAPATH: empty,
               CURL_CA_BUNDLE: bundle, CARGO_HTTP_CAINFO: bundle,
               NPM_CONFIG_CAFILE: bundle, npm_config_cafile: bundle,
               NPM_CONFIG_STRICT_SSL: 'true', npm_config_strict_ssl: 'true',
               GIT_CONFIG_COUNT: String(count + git.length),
+              GIT_CONFIG_PARAMETERS: [gitEnvironmentValue(env, 'GIT_CONFIG_PARAMETERS'),
+                ...git.map(([key, value]) => quote(key) + '=' + quote(value))].filter(Boolean).join(' '),
               ...Object.fromEntries(git.flatMap(([key, value], offset) => [
                 [`GIT_CONFIG_KEY_${count + offset}`, key], [`GIT_CONFIG_VALUE_${count + offset}`, value],
               ])),
             };
+          }
+
+          function filteredGitTrust(env, directory, empty, read) {
+            let index = 0;
+            const selected = [], environment = {};
+            const filter = (value, isDirectory) => {
+              if (!value) {
+                if (isDirectory) return empty;
+                throw new Error('The configured Git CA file is empty.');
+              }
+              const target = path.join(directory, `git-ca-${index++}`);
+              if (!isDirectory) fs.writeFileSync(target, filterAuthorities([read(value, 'utf8')]), { mode: 0o600 });
+              else {
+                fs.mkdirSync(target);
+                const groups = new Map();
+                for (const name of fs.readdirSync(value)) {
+                  const match = /^([a-f0-9]{8})\.(0|[1-9][0-9]*)$/i.exec(name);
+                  if (!match) continue;
+                  if (!groups.has(match[1])) groups.set(match[1], new Set());
+                  groups.get(match[1]).add(Number(match[2]));
+                }
+                for (const [hash, entries] of groups) {
+                  let input = 0, output = 0;
+                  // OpenSSL ignores later entries after a gap. Keep the retained chain contiguous.
+                  while (entries.has(input)) {
+                    for (const pem of filterAuthorities([read(path.join(value, `${hash}.${input++}`), 'utf8')], true)
+                      .match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? []) {
+                      fs.writeFileSync(path.join(target, `${hash}.${output++}`), pem, { mode: 0o600 });
+                    }
+                  }
+                }
+              }
+              return target;
+            };
+            for (const [kind, name] of [['sslCAInfo', 'GIT_SSL_CAINFO'], ['sslCAPath', 'GIT_SSL_CAPATH']]) {
+              const explicit = gitEnvironmentValue(env, name);
+              if (explicit !== undefined) {
+                const target = filter(explicit, kind === 'sslCAPath');
+                environment[name] = target;
+                // Workflow environment files cannot delete inherited mixed-case Windows aliases.
+                if (process.platform === 'win32') for (const alias of Object.keys(env)) {
+                  if (alias.toUpperCase() === name) environment[alias] = target;
+                }
+                continue;
+              }
+              for (const url of repositoryURLs(env)) {
+                let value;
+                try {
+                  value = execFileSync('git', ['config', '--null', '--path', '--get-urlmatch', `http.${kind}`, url],
+                    { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).replace(/\0$/, '');
+                } catch (error) {
+                  if (error.code === 'ENOENT' || error.status === 1) continue;
+                  throw new Error('Cannot inspect Git CA configuration.');
+                }
+                selected.push([`http.${url}.${kind}`, filter(value, kind === 'sslCAPath')]);
+              }
+            }
+            return { selected, environment };
           }
 
           function prepareTrust({ env = process.env, bundled = tls.rootCertificates,
@@ -152,10 +223,17 @@ jobs:
             const bundle = path.join(directory, 'ca.pem'), empty = path.join(directory, 'empty');
             fs.mkdirSync(empty, { recursive: true });
             fs.writeFileSync(bundle, pem);
+            const git = filteredGitTrust(env, directory, empty, read);
             const selectedNpm = npmInputs === undefined ? npmAuthorities({ env }) : npmInputs;
             const npmBundle = path.join(directory, 'npm-ca.pem');
             fs.writeFileSync(npmBundle, selectedNpm === null ? pem : filterAuthorities(selectedNpm));
-            return { ...trustSettings(bundle, empty, env), NPM_CONFIG_CAFILE: npmBundle, npm_config_cafile: npmBundle };
+            const settings = { ...trustSettings(bundle, empty, env, git.selected), ...git.environment,
+              NPM_CONFIG_CAFILE: npmBundle, npm_config_cafile: npmBundle };
+            if (process.platform === 'win32') for (const alias of Object.keys(env)) {
+              const canonical = alias.toUpperCase();
+              if (alias !== canonical && ['GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS'].includes(canonical)) settings[alias] = settings[canonical];
+            }
+            return settings;
           }
 
           // Composite actions run this with the runner's own Node before setup-node. npm

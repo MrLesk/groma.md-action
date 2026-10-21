@@ -149,7 +149,8 @@ it('preserves inherited Git settings and enforces Schannel CA-file use, strict T
   assert.equal(settings.GIT_CONFIG_VALUE_1, 'true');
   assert.equal(settings.GIT_CONFIG_KEY_2, 'http.sslVerify');
   assert.equal(settings.GIT_CONFIG_VALUE_2, 'true');
-  assert.equal(settings.GIT_SSL_CAPATH, '/empty');
+  assert.equal(Object.hasOwn(settings, 'GIT_SSL_CAINFO'), false);
+  assert.equal(Object.hasOwn(settings, 'GIT_SSL_CAPATH'), false);
   assert.equal(Object.hasOwn(settings, 'GIT_SSL_NO_VERIFY'), false);
   assert.equal(settings.NODE_TLS_REJECT_UNAUTHORIZED, '1');
   assert.equal(settings.NPM_CONFIG_STRICT_SSL, 'true');
@@ -172,7 +173,7 @@ it('exports safe workflow settings without forbidden NODE_OPTIONS or environment
   exportSettings(trustSettings('/filtered.pem', '/empty'), filename);
   const text = await readFile(filename, 'utf8');
   assert.doesNotMatch(text, /NODE_OPTIONS/);
-  assert.match(text, /GIT_SSL_CAINFO=\/filtered.pem/);
+  assert.match(text, /SSL_CERT_FILE=\/filtered.pem/);
   assert.throws(() => exportSettings({ NODE_OPTIONS: '--use-openssl-ca' }, filename));
   assert.throws(() => exportSettings({ SSL_CERT_FILE: 'bad\nINJECTED=1' }, filename));
 });
@@ -254,7 +255,7 @@ it('native Git reaches the private-CA mock 404 and sends no HTTP request through
   await mkdir(empty);
   const key = await readFile(path.join(fixture, 'registry-server-key.pem'));
   const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
-    !/^(?:git_config(?:_.+)?|git_ssl_no_verify|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
+    !/^(?:git_config(?:_.+)?|git_ssl_(?:no_verify|cainfo|capath)|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
   // Isolated tests suppress only Schannel's online revocation lookup for these synthetic leaves.
   // Production revocation policy is unchanged. NOSYSTEM hides Git for Windows' backend selection.
   const platform = process.platform === 'win32'
@@ -263,15 +264,33 @@ it('native Git reaches the private-CA mock 404 and sends no HTTP request through
     .flatMap(filename => ['', '.git'].map(suffix => ({ filename, suffix })))) {
     let requests = 0;
     let authorization;
-    const server = https.createServer({ key, cert: await readFile(path.join(fixture, filename)) }, (req, res) => {
+    let commandHeader;
+    const pem = await readFile(path.join(fixture, filename));
+    const leaf = new X509Certificate(pem);
+    assert.ok(Date.parse(leaf.validFrom) <= Date.now() && Date.now() < Date.parse(leaf.validTo), `${filename} must be currently valid`);
+    const server = https.createServer({ key, cert: pem }, (req, res) => {
       authorization = req.headers.authorization;
+      commandHeader = req.headers['user-agent'];
       requests++; res.writeHead(404); res.end('mock repository not found');
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
       const remote = `https://localhost:${server.address().port}/owner/fixture${suffix}`;
+      const unfiltered = path.join(root, 'unfiltered.pem');
+      await writeFile(unfiltered, [...incidents.map(c => c.pem), privateCA].join('\n'));
+      const baseline = await promisify(execFile)('git', [...platform, '-c', 'http.sslVerify=true',
+        '-c', 'http.schannelUseSSLCAInfo=true', 'ls-remote', remote], { timeout: 10000,
+        env: { ...clean, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(root, 'no-global-config'),
+          GIT_SSL_CAINFO: unfiltered, GIT_SSL_CAPATH: empty, NO_PROXY: '127.0.0.1,localhost',
+          GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' },
+      }).then(() => null, error => error);
+      assert.ok(Number.isInteger(baseline?.code) && !baseline.killed, baseline?.message);
+      assert.ok(requests > 0, `The unfiltered strict-TLS control must reach HTTP: ${baseline?.stderr}`);
+      assert.match(baseline.stderr, /not found|404/i);
+      requests = 0;
       const inherited = { ...clean,
         GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: `http.${remote}.sslVerify`, GIT_CONFIG_VALUE_0: 'false',
+        GIT_CONFIG_PARAMETERS: `'http.${remote}.sslVerify'='false' 'http.userAgent'='Fixture-Command-Scope'`,
         GITHUB_SERVER_URL: `https://localhost:${server.address().port}`, GITHUB_REPOSITORY: 'owner/fixture',
         GH_TOKEN: 'fixture-only', GIT_SSL_NO_VERIFY: 'false' };
       const env = publicationGitEnvironment({ ...inherited, ...trustSettings(cafile, empty, inherited),
@@ -287,10 +306,86 @@ it('native Git reaches the private-CA mock 404 and sends no HTTP request through
         assert.ok(requests > 0, 'The private CA must reach the HTTP mock: ' + result.stderr);
         assert.match(result.stderr, /not found|404/i);
         assert.equal(authorization, 'basic ' + Buffer.from('x-access-token:fixture-only').toString('base64'));
+        assert.equal(commandHeader, 'Fixture-Command-Scope');
       } else {
         assert.equal(requests, 0, `${filename} must fail before any HTTP request`);
         assert.match(result.stderr, /certificate|SSL|issuer|trust|schannel|revok/i);
       }
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   }
+});
+
+
+it('keeps native Git private CA selection for GitHub and unrelated remotes without exporting a global default', async t => {
+  const root = await temporary(t), config = path.join(root, 'gitconfig');
+  const ca = path.join(root, "operator's-ca.pem");
+  await writeFile(ca, [...incidents.map(c => c.pem), privateCA].join('\n'));
+  const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+    !/^(?:git_config(?:_.+)?|git_ssl_(?:no_verify|cainfo|capath)|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
+  Object.assign(clean, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config,
+    NO_PROXY: '127.0.0.1,localhost', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' });
+  const platform = process.platform === 'win32'
+    ? ['-c', 'http.sslBackend=schannel', '-c', 'http.schannelCheckRevoke=false'] : [];
+  for (const mode of ['github', 'unrelated', 'explicit']) {
+    let requests = 0;
+    const server = https.createServer({ key: await readFile(path.join(fixture, 'registry-server-key.pem')),
+      cert: await readFile(path.join(fixture, 'registry-server.pem')) }, (_, response) => {
+      requests++; response.writeHead(404); response.end('mock repository not found');
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const origin = `https://localhost:${server.address().port}`, remote = `${origin}/owner/fixture`;
+      await writeFile(config, `[http "${remote}"]\n sslCAInfo = ${JSON.stringify(ca)}\n`);
+      const env = { ...clean, GITHUB_SERVER_URL: mode === 'unrelated' ? 'https://github.com' : origin,
+        GITHUB_REPOSITORY: 'owner/fixture', ...(mode === 'explicit' ? { GIT_SSL_CAINFO: ca } : {}) };
+      const directory = path.join(root, mode);
+      const { mkdir } = await import('node:fs/promises'); await mkdir(directory);
+      const settings = prepareTrust({ env, directory, bundled: [tls.rootCertificates[0]], getCertificates: () => [], npmInputs: null });
+      assert.equal(Object.hasOwn(settings, 'GIT_SSL_CAINFO'), mode === 'explicit');
+      const child = { ...env, ...settings };
+      if (mode === 'unrelated') {
+        const old = await promisify(execFile)('git', [...platform, 'ls-remote', remote], {
+          env: { ...child, GIT_SSL_CAINFO: settings.SSL_CERT_FILE, GIT_SSL_CAPATH: settings.SSL_CERT_DIR }, timeout: 10000,
+        }).then(() => null, error => error);
+        assert.ok(Number.isInteger(old?.code) && !old.killed, old?.message);
+        assert.equal(requests, 0, 'The former global override must reproduce the private Git regression.');
+        assert.match(old.stderr, /certificate|SSL|issuer|trust|schannel/i);
+      }
+      if (mode !== 'unrelated') {
+        const selected = mode === 'explicit' ? settings.GIT_SSL_CAINFO
+          : (await promisify(execFile)('git', ['config', '--get-urlmatch', 'http.sslCAInfo', remote], { env: child })).stdout.trim();
+        assert.deepEqual(certificates(await readFile(selected, 'utf8')).map(key), [key(privateCA)]);
+      }
+      const result = await promisify(execFile)('git', [...platform, 'ls-remote', remote], { env: child, timeout: 10000 })
+        .then(() => null, error => error);
+      assert.ok(Number.isInteger(result?.code) && !result.killed, result?.message);
+      assert.ok(requests > 0, `${mode}: ${result?.stderr}`);
+      assert.match(result.stderr, /404|not found/i);
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+  }
+});
+
+it('filters explicit Git CA directories without widening trust through hash gaps and rejects empty selected files', async t => {
+  const root = await temporary(t), source = path.join(root, 'source'), output = path.join(root, 'output');
+  const { mkdir } = await import('node:fs/promises'); await mkdir(source); await mkdir(output);
+  await writeFile(path.join(source, '1234abcd.0'), incidents[0].pem);
+  await writeFile(path.join(source, '1234abcd.1'), privateCA);
+  await writeFile(path.join(source, '1234abcd.3'), tls.rootCertificates[0]);
+  await writeFile(path.join(source, 'unrelated.pem'), tls.rootCertificates[1]);
+  const settings = prepareTrust({ env: { GIT_SSL_CAPATH: source }, directory: output,
+    bundled: [privateCA], getCertificates: () => [], npmInputs: null });
+  assert.deepEqual(await readdir(settings.GIT_SSL_CAPATH), ['1234abcd.0']);
+  assert.deepEqual(certificates(await readFile(path.join(settings.GIT_SSL_CAPATH, '1234abcd.0'), 'utf8')).map(key), [key(privateCA)]);
+  assert.throws(() => prepareTrust({ env: { GIT_SSL_CAINFO: '' }, directory: output,
+    bundled: [privateCA], getCertificates: () => [], npmInputs: null }), /Git CA file is empty/);
+});
+
+it('native Git parses strict URL configuration with equals and apostrophes while preserving inherited command scope', async () => {
+  const env = { ...process.env, GITHUB_SERVER_URL: "https://example.invalid/it's=enterprise", GITHUB_REPOSITORY: 'owner/fixture',
+    GIT_CONFIG_COUNT: '0', GIT_CONFIG_PARAMETERS: "'http.userAgent'='Original-Caller'" };
+  const child = { ...env, ...trustSettings("/operator's=filtered.pem", '/empty', env) };
+  const execute = promisify(execFile);
+  assert.equal((await execute('git', ['config', '--get-urlmatch', 'http.sslVerify',
+    "https://example.invalid/it's=enterprise/owner/fixture"], { env: child })).stdout.trim(), 'true');
+  assert.equal((await execute('git', ['config', '--get', 'http.userAgent'], { env: child })).stdout.trim(), 'Original-Caller');
 });

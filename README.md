@@ -61,7 +61,7 @@ Both comparison commits must contain architecture that the selected Groma versio
 
 ## TLS trust during installation
 
-The Action uses Node 26.12.1 and npm 12.2.0. Before its network steps it filters the twelve incident keys from bundled, system and extra CAs and keeps strict TLS enabled. Native npm retains authentication, proxy and registry configuration, including the precedence and exclusivity of custom CA settings. Private CA roots and existing Git settings are preserved.
+The Action uses Node 26.12.1 and npm 12.2.0. Before its network steps it filters the twelve incident keys from bundled, system and extra CAs and keeps strict TLS enabled. Native npm retains authentication, proxy and registry configuration, including the precedence and exclusivity of custom CA settings. Private CA roots and existing Git settings are preserved. Checkout and publication use the filtered CA policy selected by Git for the repository; other Git remotes retain their own CA settings for Groma to filter when used.
 
 Remove `GIT_SSL_NO_VERIFY` from runner and workflow environments; setup stops if it is present with any value. The composite Actions prepare trust with the runner's bundled Node before provisioning Node/npm, so neither tool needs to be preinstalled on `PATH`.
 
