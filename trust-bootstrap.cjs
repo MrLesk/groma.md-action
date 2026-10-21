@@ -116,6 +116,9 @@ function trustSettings(bundle, empty, env = process.env) {
 function prepareTrust({ env = process.env, bundled = tls.rootCertificates,
   getCertificates = tls.getCACertificates?.bind(tls), npmInputs, read = fs.readFileSync,
   directory = fs.mkdtempSync(path.join(env.RUNNER_TEMP || os.tmpdir(), 'groma-tls-')) } = {}) {
+  if (Object.keys(env).some(key => key.toUpperCase() === 'GIT_SSL_NO_VERIFY' && env[key] !== undefined)) {
+    throw new Error('Remove GIT_SSL_NO_VERIFY from the runner or workflow environment before continuing.');
+  }
   const inputs = [...bundled];
   if (getCertificates) for (const kind of ['default', 'system', 'extra']) inputs.push(...getCertificates(kind));
   for (const key of ['SSL_CERT_FILE', 'NODE_EXTRA_CA_CERTS']) {
@@ -131,6 +134,15 @@ function prepareTrust({ env = process.env, bundled = tls.rootCertificates,
   return { ...trustSettings(bundle, empty, env), NPM_CONFIG_CAFILE: npmBundle, npm_config_cafile: npmBundle };
 }
 
+// Composite actions run this with the runner's own Node before setup-node. npm
+// is not available yet, and its original CA configuration must survive until setup.
+function prepareWorkflowTrust(options = {}) {
+  const settings = prepareTrust({ ...options, npmInputs: null });
+  delete settings.NPM_CONFIG_CAFILE;
+  delete settings.npm_config_cafile;
+  return settings;
+}
+
 function exportSettings(settings, filename) {
   if (!filename) throw new Error('GITHUB_ENV is required.');
   if (Object.hasOwn(settings, 'NODE_OPTIONS') || Object.values(settings).some(value => /[\r\n]/.test(value))) {
@@ -139,5 +151,5 @@ function exportSettings(settings, filename) {
   fs.appendFileSync(filename, Object.entries(settings).map(([key, value]) => `${key}=${value}\n`).join(''));
 }
 
-module.exports = { blockedSPKI, filterAuthorities, nativeNpm, npmCLI, npmAuthorities, trustSettings, prepareTrust, exportSettings };
+module.exports = { blockedSPKI, filterAuthorities, nativeNpm, npmCLI, npmAuthorities, trustSettings, prepareTrust, prepareWorkflowTrust, exportSettings };
 if (require.main === module) exportSettings(prepareTrust(), process.env.GITHUB_ENV);

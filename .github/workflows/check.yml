@@ -146,6 +146,9 @@ jobs:
           function prepareTrust({ env = process.env, bundled = tls.rootCertificates,
             getCertificates = tls.getCACertificates?.bind(tls), npmInputs, read = fs.readFileSync,
             directory = fs.mkdtempSync(path.join(env.RUNNER_TEMP || os.tmpdir(), 'groma-tls-')) } = {}) {
+            if (Object.keys(env).some(key => key.toUpperCase() === 'GIT_SSL_NO_VERIFY' && env[key] !== undefined)) {
+              throw new Error('Remove GIT_SSL_NO_VERIFY from the runner or workflow environment before continuing.');
+            }
             const inputs = [...bundled];
             if (getCertificates) for (const kind of ['default', 'system', 'extra']) inputs.push(...getCertificates(kind));
             for (const key of ['SSL_CERT_FILE', 'NODE_EXTRA_CA_CERTS']) {
@@ -159,6 +162,15 @@ jobs:
             const npmBundle = path.join(directory, 'npm-ca.pem');
             fs.writeFileSync(npmBundle, selectedNpm === null ? pem : filterAuthorities(selectedNpm));
             return { ...trustSettings(bundle, empty, env), NPM_CONFIG_CAFILE: npmBundle, npm_config_cafile: npmBundle };
+          }
+
+          // Composite actions run this with the runner's own Node before setup-node. npm
+          // is not available yet, and its original CA configuration must survive until setup.
+          function prepareWorkflowTrust(options = {}) {
+            const settings = prepareTrust({ ...options, npmInputs: null });
+            delete settings.NPM_CONFIG_CAFILE;
+            delete settings.npm_config_cafile;
+            return settings;
           }
 
           function exportSettings(settings, filename) {
@@ -307,7 +319,13 @@ jobs:
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
           const { release } = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
-          if (!release || release.draft || release.prerelease || !/^v1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(release.tag_name)) {
+          function version(tag) {
+            const match = /^v1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.exec(tag);
+            if (!match) return undefined;
+            const parts = match.slice(1).map(Number);
+            return parts.every(Number.isSafeInteger) ? parts : undefined;
+          }
+          if (!release || release.draft || release.prerelease || !version(release.tag_name)) {
             throw new Error('Only a stable v1.x.y release can advance v1.');
           }
           const base = `${process.env.GITHUB_API_URL}/repos/${process.env.GITHUB_REPOSITORY}`;
@@ -329,15 +347,25 @@ jobs:
           if (object.type !== 'commit' || object.sha !== process.env.GITHUB_SHA) {
             throw new Error('The release tag no longer identifies the exact checked commit.');
           }
-          const latest = await api('releases/latest');
-          if (latest.id !== release.id || latest.tag_name !== release.tag_name) {
-            console.log('This release is no longer latest; v1 was not changed.');
+          let latest;
+          for (let page = 1; ; page++) {
+            const releases = await api(`releases?per_page=100&page=${page}`);
+            for (const candidate of releases) {
+              const parts = version(candidate.tag_name);
+              if (candidate.draft || candidate.prerelease || !parts) continue;
+              const previous = latest && version(latest.tag_name);
+              if (!previous || parts[0] > previous[0] || (parts[0] === previous[0] && parts[1] > previous[1])) latest = candidate;
+            }
+            if (releases.length < 100) break;
+          }
+          if (!latest || latest.id !== release.id || latest.tag_name !== release.tag_name) {
+            console.log('This release is not the newest stable v1 release; v1 was not changed.');
           } else {
             const current = await api('git/ref/tags/v1', 'GET', undefined, true);
             if (current?.object.sha === object.sha) console.log('v1 already identifies the checked release.');
             else if (current) {
               await api('git/refs/tags/v1', 'PATCH', { sha: object.sha, force: false });
-              console.log('Advanced v1 to the checked latest stable release.');
+              console.log('Advanced v1 to the checked newest stable v1 release.');
             } else {
               await api('git/refs', 'POST', { ref: 'refs/tags/v1', sha: object.sha });
               console.log('Created v1 for the checked latest stable release.');

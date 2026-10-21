@@ -9,7 +9,7 @@ import path from 'node:path';
 import tls from 'node:tls';
 import { it } from 'node:test';
 import { publicationGitEnvironment } from '../publish/publish.mjs';
-import { blockedSPKI, filterAuthorities, npmAuthorities, trustSettings, prepareTrust, exportSettings,
+import { blockedSPKI, filterAuthorities, npmAuthorities, trustSettings, prepareTrust, prepareWorkflowTrust, exportSettings,
   installArguments, installGroma, runNpm } from '../prepare-trust.mjs';
 
 const fixture = path.join(import.meta.dirname, 'fixtures/certificate-trust');
@@ -34,6 +34,32 @@ it('excludes every incident certificate variant by all twelve SPKI keys while pr
 it('fails closed for empty, compromised-only, malformed and non-PEM trust', () => {
   for (const input of [[], incidents.map(c => c.pem), ['garbage'], ['-----BEGIN CERTIFICATE-----\ngarbage\n-----END CERTIFICATE-----']]) {
     assert.throws(() => filterAuthorities(input));
+  }
+});
+
+it('rejects every inherited Git TLS bypass spelling and value before preparing workflow trust', async t => {
+  const root = await temporary(t);
+  for (const name of ['GIT_SSL_NO_VERIFY', 'git_ssl_no_verify', 'Git_Ssl_No_Verify']) {
+    for (const value of ['', 'false', '0', '1']) {
+      assert.throws(() => prepareTrust({ env: { [name]: value }, directory: root, npmInputs: null,
+        bundled: [privateCA], getCertificates: () => { throw new Error('Must reject the bypass first.'); } }), /Remove GIT_SSL_NO_VERIFY/);
+    }
+  }
+});
+
+it('prepares composite workflow trust without PATH Node/npm and preserves original npm CA selection', async t => {
+  const root = await temporary(t), env = { PATH: '', NPM_CONFIG_CAFILE: '/original/npm-policy.pem' };
+  const settings = prepareWorkflowTrust({ env, directory: root, bundled: [privateCA], getCertificates: () => [] });
+  assert.deepEqual(certificates(await readFile(settings.SSL_CERT_FILE, 'utf8')).map(key), [key(privateCA)]);
+  assert.equal(Object.hasOwn(settings, 'NPM_CONFIG_CAFILE'), false);
+  assert.equal(Object.hasOwn(settings, 'npm_config_cafile'), false);
+  assert.equal(env.NPM_CONFIG_CAFILE, '/original/npm-policy.pem');
+  for (const filename of ['action.yml', 'publish/action.yml']) {
+    const source = await readFile(new URL('../' + filename, import.meta.url), 'utf8');
+    const first = source.slice(source.indexOf('    - name: Prepare filtered'), source.indexOf('    - uses: actions/setup-node'));
+    assert.match(first, /uses: actions\/github-script@v9\.0\.0/);
+    assert.match(first, /trust\.prepareWorkflowTrust\(\)/);
+    assert.doesNotMatch(first, /shell:|run: node/);
   }
 });
 
@@ -212,7 +238,7 @@ it('all four workflow entry points embed the exact offline bootstrap before netw
   assert.match(tagJob, /cancel-in-progress: false/);
   assert.match(tagJob, /object.sha !== process.env.GITHUB_SHA/);
   assert.match(tagJob, /latest.id !== release.id/);
-  const allowedTag = new RegExp(tagJob.match(/!\/(.+)\/\.test\(release\.tag_name\)/)[1]);
+  const allowedTag = new RegExp(tagJob.match(/const match = \/(.+)\/\.exec\(tag\)/)[1]);
   for (const tag of ['v1.0.0', 'v1.2.2', 'v1.20.10']) assert.ok(allowedTag.test(tag));
   for (const tag of ['v2.0.0', 'v1.02.2', 'v1.2.2-rc.1', 'v1.2.2/unsafe']) assert.equal(allowedTag.test(tag), false);
   assert.match(tagJob, /api\('git\/refs\/tags\/v1', 'PATCH', \{ sha: object.sha, force: false \}\)/);

@@ -63,4 +63,6 @@ Both comparison commits must contain architecture that the selected Groma versio
 
 The Action uses Node 26.12.1 and npm 12.2.0. Before its network steps it filters the twelve incident keys from bundled, system and extra CAs and keeps strict TLS enabled. Native npm retains authentication, proxy and registry configuration, including the precedence and exclusivity of custom CA settings. Private CA roots and existing Git settings are preserved.
 
+Remove `GIT_SSL_NO_VERIFY` from runner and workflow environments; setup stops if it is present with any value. The composite Actions prepare trust with the runner's bundled Node before provisioning Node/npm, so neither tool needs to be preinstalled on `PATH`.
+
 The examples prepare the same filtered trust before checkout or GitHub API calls. Keep that first step and the workflow `NODE_OPTIONS` setting when adapting them. The GitHub runner prepares Action archives before job steps; that earlier phase depends on the runner vendor's trust updates.

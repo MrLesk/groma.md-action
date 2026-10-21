@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import trust from './trust-bootstrap.cjs';
-export const { blockedSPKI, filterAuthorities, npmAuthorities, trustSettings, prepareTrust, exportSettings } = trust;
+export const { blockedSPKI, filterAuthorities, npmAuthorities, trustSettings, prepareTrust, prepareWorkflowTrust, exportSettings } = trust;
 
 export function installArguments(packageName, bundle) {
   if (!/^groma\.md@[0-9A-Za-z][0-9A-Za-z.+_-]*$/.test(packageName) && packageName !== 'npm@12.2.0') {

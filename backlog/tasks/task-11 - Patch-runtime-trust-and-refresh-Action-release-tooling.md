@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T15:04:00Z'
+updated_date: '2026-10-21T15:10:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -86,4 +86,6 @@ Hosted df3a9ac Windows native Git fixture timed out10s with code=null; Linux/mac
 Diagnostic Windows trace locates timeout in emudhra chain verification: private positive finishes; incident handshake completes and Schannel imports the private-only CA file, then stalls10s before any HTTP request. Appended existing terminal public ECC-G3/AAA roots to the served incident peer chains, retaining filtered client trust,10s deadline and completed certificate rejection/zeroHTTP assertions. This removes missing-issuer discovery from synthetic fixture construction. AIA/network lookup is a consistent inference from the stalled native verifier, not proven packet-level evidence; hosted Windows completed rejection remains required.
 
 Root review also reproduced native npm exclusive-CA widening: a configured private-only cafile rejected a second authority with0HTTP, while the combined Action bundle accepted it with3HTTP. The Action now resolves effective CA precedence through the installed native npm configuration loader and writes a distinct filtered npm bundle; default Node/GitHub trust stays separate. npm installs use NPM_CONFIG_CAFILE explicitly, preserving native auth/registry/proxy resolution. Actual npm controls now reject the unselected authority with0HTTP, accept the selected private CA, and verify the other authority works only in the global-bundle control. Tests cover higher-priority user inline CA over global cafile, env cafile over user CA, unreadable selected file rejection and ignored overridden unreadable file. All40 Node tests pass on patched Node26.12.1/npm12.2.0; six strict YAML files and diff checks pass. CLI source/defaults/release instructions are complete; AC4 remains pending final exact-head hosted checks, completed code/security review and published Groma0.7.4 smoke.
+
+Addressed all3 Codex code-review findings from88b655. Bootstrap rejects any inherited case spelling/value of GIT_SSL_NO_VERIFY before proceeding. Composite build/publish now use current actions/github-script9.0.0 and the runner Node to prepare global trust without requiring PATH Node/npm; npm CA env fields remain untouched until setup-node and the native npm policy stage. v1 release advancement now selects the highest stable v1 semver across paginated releases, ignoring newer majors/drafts/prereleases and skipping older maintenance versions. Actual inline release-program tests exercise v2 coexistence, older-v1 rejection and pagination while retaining fixed-v1/non-forced writes and exact-source gates. All45 local Node tests,6 strict YAML files and diff checks pass; hosted exact-head checks and completed fresh reviews remain required.
 <!-- SECTION:NOTES:END -->
