@@ -144,7 +144,7 @@ it('the filtered bundle accepts a private loopback registry and rejects both com
       });
       if (filename === 'registry-server.pem') assert.equal(await response, 200);
       else await assert.rejects(response, /certificate|issuer|revoked/i);
-    } finally { await new Promise(resolve => server.close(resolve)); }
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   }
 });
 
@@ -207,10 +207,13 @@ it('native Git reaches the private-CA mock 404 and sends no HTTP request through
         GH_TOKEN: 'fixture-only', GIT_SSL_NO_VERIFY: 'false' };
       const env = publicationGitEnvironment({ ...inherited, ...trustSettings(cafile, empty, inherited),
         GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(root, 'no-global-config'),
-        NO_PROXY: '127.0.0.1,localhost' });
+        NO_PROXY: '127.0.0.1,localhost', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never',
+        GIT_TRACE_CURL: '1', GIT_TRACE_CURL_NO_DATA: '1' });
       const result = await promisify(execFile)('git', [...platform, 'ls-remote', remote],
         { env, timeout: 10000 }).then(() => null, error => error);
-      assert.ok(result?.code, 'The mock 404 or certificate rejection must stop Git.');
+      const diagnostic = `${filename}${suffix || ' (no suffix)'}: code=${result?.code}, signal=${result?.signal}, killed=${result?.killed}, requests=${requests}\n${result?.stderr || ''}`;
+      assert.ok(Number.isInteger(result?.code) && result.code !== 0 && !result.killed,
+        'The mock 404 or certificate rejection must stop Git. ' + diagnostic);
       if (filename === 'registry-server.pem') {
         assert.ok(requests > 0, 'The private CA must reach the HTTP mock: ' + result.stderr);
         assert.match(result.stderr, /not found|404/i);
@@ -219,6 +222,6 @@ it('native Git reaches the private-CA mock 404 and sends no HTTP request through
         assert.equal(requests, 0, `${filename} must fail before any HTTP request`);
         assert.match(result.stderr, /certificate|SSL|issuer|trust|schannel|revok/i);
       }
-    } finally { await new Promise(resolve => server.close(resolve)); }
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   }
 });

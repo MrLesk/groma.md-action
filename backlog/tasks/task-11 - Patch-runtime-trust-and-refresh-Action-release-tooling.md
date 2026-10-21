@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T14:44:00Z'
+updated_date: '2026-10-21T14:52:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -78,4 +78,6 @@ Hosted fixture-fix head c87a074 passed all three OS39-test jobs. Repository acce
 Target changed to Groma0.7.4 after the fresh audit found a JVM trust-store copy isolation defect in the unpublished0.7.3 candidate. Updated Action defaults, documentation, examples and real npm smoke gate. Released tags are unchanged; the Action remains draft until the corrected CLI is published and review/checks pass.
 
 Root review reproduced a URL-specific Git verification bypass: generic http.sslVerify=true lost to an inherited exact-repository sslVerify=false, and native Git reached the compromised eMudhra mock before the fix. Trust preparation now appends strict exact repository URL settings for both checkout and publisher URL forms, preserving inherited indexed configuration. Six native cases cover private CA success with publisher fake authentication preserved and zero HTTP requests through both incident paths, with and without .git. All39 Node tests,6 strict YAML files and git diff --check pass. Hosted exact-head checks and the published Groma0.7.4 smoke remain required. The obsolete final summary was cleared; earlier access-blocked/0.7.3 notes are historical.
+
+Hosted df3a9ac Windows native Git fixture timed out10s with code=null; Linux/mac passed. The earlier assertion had no case/stderr, so no certificate rejection or source cause is claimed. Added fixture-only noninteractive settings and curl header tracing retained only in captured child stderr, emitted with filename/suffix/code/signal/request count on failure. All auth is fake fixture data. Kept10s bound and tightened requirement to a completed native Git exit; no timeout counts as a zero-request security pass. Close leftover fixture sockets on failure to permit diagnostics/cleanup. Actual Windows trace is the next gate before any substantive fix.
 <!-- SECTION:NOTES:END -->
