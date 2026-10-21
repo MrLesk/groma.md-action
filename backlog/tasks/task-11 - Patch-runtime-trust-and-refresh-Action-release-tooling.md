@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T14:11:00Z'
+updated_date: '2026-10-21T14:15:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -42,7 +42,7 @@ The October 2026 CA compromise affects the Action and workflow network steps bef
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [x] #1 The Action and all workflow examples use patched Node/npm and current Action releases, with default Groma 0.7.3.
+- [ ] #1 The Action and all workflow examples use patched Node/npm and current Action releases, with default Groma 0.7.4.
 - [x] #2 Trust preparation excludes all twelve incident SPKIs while preserving private roots, strict TLS, inherited Git configuration and native npm custom CA configuration.
 - [x] #3 Behavior/security tests and all six YAML files validate under patched Node; release instructions describe GitHub Release/Marketplace and the tested v1.2.2 major-tag move.
 - [ ] #4 One reviewable PR contains the recovered hotfix, with hosted checks, published Groma smoke and critical review required before release.
@@ -72,6 +72,8 @@ Repository access is now enabled and draft PR10 is open. Initial hosted checks e
 Approved release support now extends the existing Check workflow: stable published v1.x.y releases test the exact commit in the read-only matrix and real npm CLI smoke, then an isolated contents-write job advances only v1 through a non-forced API ref update. It dereferences annotated version tags, checks the tested SHA and latest stable release, and serializes advancement. Full version tags are never written. Local39 tests, strict YAML parsing and the inline Node release-script syntax check pass; hosted candidate checks remain the gate.
 
 Hosted fixture-fix head c87a074 passed all three OS39-test jobs. Repository access is restored; PR10 remains draft while Groma publication and the newly requested cross-project critical review are pending. Approved release-tag changes have been locally reviewed for fixed v1 write targets, exact-SHA read-only gates, strict stable version validation and non-forced latest-release advancement.
+
+Target changed to Groma0.7.4 after the fresh audit found a JVM trust-store copy isolation defect in the unpublished0.7.3 candidate. Updated Action defaults, documentation, examples and real npm smoke gate. Released tags are unchanged; the Action remains draft until the corrected CLI is published and review/checks pass.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

@@ -158,7 +158,7 @@ jobs:
         shell: bash
         run: |
           npm install --global npm@12.2.0 --strict-ssl=true
-          test "$(npm view groma.md@0.7.3 version --strict-ssl=true)" = "0.7.3"
+          test "$(npm view groma.md@0.7.4 version --strict-ssl=true)" = "0.7.4"
 
       - name: Prepare initialized project fixture
         shell: bash
@@ -183,7 +183,7 @@ jobs:
 
       - name: Verify the default Groma version and project upgrade
         run: |
-          test "$(groma --version)" = "0.7.3"
+          test "$(groma --version)" = "0.7.4"
           test -f groma/config.json
           test ! -e groma/scanners.json
 
@@ -227,13 +227,13 @@ jobs:
         id: comparison
         uses: ./.action
         with:
-          groma-version: '0.7.3'
+          groma-version: '0.7.4'
           output: comparison-site
           from: ${{ steps.commits.outputs.from }}
           revision: ${{ steps.commits.outputs.revision }}
 
       - name: Verify the selected Groma version
-        run: test "$(groma --version)" = "0.7.3"
+        run: test "$(groma --version)" = "0.7.4"
 
       - name: Verify committed comparison
         env:
