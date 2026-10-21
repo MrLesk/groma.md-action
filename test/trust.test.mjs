@@ -186,26 +186,35 @@ it('native Git reaches the private-CA mock 404 and sends no HTTP request through
   const key = await readFile(path.join(fixture, 'registry-server-key.pem'));
   const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
     !/^(?:git_config(?:_.+)?|git_ssl_no_verify|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
-  const env = { ...clean, ...trustSettings(cafile, empty, clean),
-    GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(root, 'no-global-config'),
-    NO_PROXY: '127.0.0.1,localhost' };
   // Isolated tests suppress only Schannel's online revocation lookup for these synthetic leaves.
   // Production revocation policy is unchanged. NOSYSTEM hides Git for Windows' backend selection.
   const platform = process.platform === 'win32'
     ? ['-c', 'http.sslBackend=schannel', '-c', 'http.schannelCheckRevoke=false'] : [];
-  for (const filename of ['registry-server.pem', 'incident-server-emudhra.pem', 'incident-server-aaa.pem']) {
+  for (const { filename, suffix } of ['registry-server.pem', 'incident-server-emudhra.pem', 'incident-server-aaa.pem']
+    .flatMap(filename => ['', '.git'].map(suffix => ({ filename, suffix })))) {
     let requests = 0;
-    const server = https.createServer({ key, cert: await readFile(path.join(fixture, filename)) }, (_req, res) => {
+    let authorization;
+    const server = https.createServer({ key, cert: await readFile(path.join(fixture, filename)) }, (req, res) => {
+      authorization = req.headers.authorization;
       requests++; res.writeHead(404); res.end('mock repository not found');
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
-      const result = await promisify(execFile)('git', [...platform, 'ls-remote', `https://localhost:${server.address().port}/fixture.git`],
+      const remote = `https://localhost:${server.address().port}/owner/fixture${suffix}`;
+      const inherited = { ...clean,
+        GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: `http.${remote}.sslVerify`, GIT_CONFIG_VALUE_0: 'false',
+        GITHUB_SERVER_URL: `https://localhost:${server.address().port}`, GITHUB_REPOSITORY: 'owner/fixture',
+        GH_TOKEN: 'fixture-only', GIT_SSL_NO_VERIFY: 'false' };
+      const env = publicationGitEnvironment({ ...inherited, ...trustSettings(cafile, empty, inherited),
+        GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(root, 'no-global-config'),
+        NO_PROXY: '127.0.0.1,localhost' });
+      const result = await promisify(execFile)('git', [...platform, 'ls-remote', remote],
         { env, timeout: 10000 }).then(() => null, error => error);
       assert.ok(result?.code, 'The mock 404 or certificate rejection must stop Git.');
       if (filename === 'registry-server.pem') {
         assert.ok(requests > 0, 'The private CA must reach the HTTP mock: ' + result.stderr);
         assert.match(result.stderr, /not found|404/i);
+        assert.equal(authorization, 'basic ' + Buffer.from('x-access-token:fixture-only').toString('base64'));
       } else {
         assert.equal(requests, 0, `${filename} must fail before any HTTP request`);
         assert.match(result.stderr, /certificate|SSL|issuer|trust|schannel|revok/i);

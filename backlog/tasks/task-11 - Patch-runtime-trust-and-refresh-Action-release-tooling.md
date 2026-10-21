@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T14:15:00Z'
+updated_date: '2026-10-21T14:44:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -43,7 +43,7 @@ The October 2026 CA compromise affects the Action and workflow network steps bef
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 The Action and all workflow examples use patched Node/npm and current Action releases, with default Groma 0.7.4.
-- [x] #2 Trust preparation excludes all twelve incident SPKIs while preserving private roots, strict TLS, inherited Git configuration and native npm custom CA configuration.
+- [ ] #2 Trust preparation excludes all twelve incident SPKIs while preserving private roots, strict TLS, inherited Git configuration and native npm custom CA configuration.
 - [x] #3 Behavior/security tests and all six YAML files validate under patched Node; release instructions describe GitHub Release/Marketplace and the tested v1.2.2 major-tag move.
 - [ ] #4 One reviewable PR contains the recovered hotfix, with hosted checks, published Groma smoke and critical review required before release.
 <!-- AC:END -->
@@ -54,6 +54,8 @@ The October 2026 CA compromise affects the Action and workflow network steps bef
 1. Read the project and Backlog workflow guidance and recover pinned runtime/key/fixture inputs. 2. Add offline CA filtering and strict npm setup, then wire it before workflow network steps and update runtime/action/CLI versions. 3. Add meaningful security/compatibility regressions, validate Node tests and six YAML files, and document coordinated release. 4. Finalize TASK-11 and commit locally without attempting remote writes.
 
 5. Publish the reviewed tree after repository access is granted, fix hosted portability failures, and add the approved release-published v1 advancement after read-only checks and real Groma smoke.
+
+6. Close the demonstrated Git URL-specific sslVerify override in workflow and publisher HTTPS targets; prove both incident paths are rejected with an inherited exact-URL false setting, preserve auth/indexed settings, then rerun hosted gates.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -74,12 +76,6 @@ Approved release support now extends the existing Check workflow: stable publish
 Hosted fixture-fix head c87a074 passed all three OS39-test jobs. Repository access is restored; PR10 remains draft while Groma publication and the newly requested cross-project critical review are pending. Approved release-tag changes have been locally reviewed for fixed v1 write targets, exact-SHA read-only gates, strict stable version validation and non-forced latest-release advancement.
 
 Target changed to Groma0.7.4 after the fresh audit found a JVM trust-store copy isolation defect in the unpublished0.7.3 candidate. Updated Action defaults, documentation, examples and real npm smoke gate. Released tags are unchanged; the Action remains draft until the corrected CLI is published and review/checks pass.
+
+Root review reproduced a URL-specific Git verification bypass: generic http.sslVerify=true lost to an inherited exact-repository sslVerify=false, and native Git reached the compromised eMudhra mock before the fix. Trust preparation now appends strict exact repository URL settings for both checkout and publisher URL forms, preserving inherited indexed configuration. Six native cases cover private CA success with publisher fake authentication preserved and zero HTTP requests through both incident paths, with and without .git. All39 Node tests,6 strict YAML files and git diff --check pass. Hosted exact-head checks and the published Groma0.7.4 smoke remain required. The obsolete final summary was cleared; earlier access-blocked/0.7.3 notes are historical.
 <!-- SECTION:NOTES:END -->
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Recovered the Action security hotfix with Groma 0.7.3, Node 26.12.1/npm 12.2.0, current actions and filtered offline trust. Native npm retains custom/private CAs and auth/proxy configuration. Git verification bypass variables are omitted, Schannel/sslVerify settings are preserved, and publisher auth appends after inherited Git entries. Release guidance requires published Groma 0.7.3, passing exact-head Check, GitHub Release/Marketplace v1.2.2 and the tested v1 major tag.
-
-Verified 39 Node tests, six strict YAML files, native npm/Git configuration behavior, private HTTPS positive controls and both compromised-chain rejections. The native Git regression was proved to fail when the former false-valued bypass export was restored temporarily. Hosted CI and publication remain blocked by repository installation access; no push/PR/write fallback was attempted.
-<!-- SECTION:FINAL_SUMMARY:END -->

@@ -52,8 +52,20 @@ function npmAuthorities({ env = process.env, query = nativeNpm, read = fs.readFi
 }
 
 function trustSettings(bundle, empty, env = process.env) {
+  const git = [['http.schannelUseSSLCAInfo', 'true'], ['http.sslVerify', 'true']];
+  if (env.GITHUB_SERVER_URL && env.GITHUB_REPOSITORY) {
+    const repository = new URL(`${env.GITHUB_SERVER_URL.replace(/\/+$/, '')}/${env.GITHUB_REPOSITORY}`);
+    if (repository.username || repository.password) throw new Error('GitHub server URL must not contain credentials.');
+    if (repository.protocol === 'https:') {
+      // Git chooses URL-specific settings before generic ones, regardless of their order.
+      // checkout and the publisher use these two forms of the credential-free repository URL.
+      for (const url of [repository.href, `${repository.href}.git`]) {
+        git.push([`http.${url}.sslVerify`, 'true'], [`http.${url}.schannelUseSSLCAInfo`, 'true']);
+      }
+    }
+  }
   const raw = env.GIT_CONFIG_COUNT ?? '0';
-  if (!/^(0|[1-9][0-9]*)$/.test(raw) || !Number.isSafeInteger(Number(raw) + 2)) {
+  if (!/^(0|[1-9][0-9]*)$/.test(raw) || !Number.isSafeInteger(Number(raw) + git.length)) {
     throw new Error('Invalid GIT_CONFIG_COUNT.');
   }
   const count = Number(raw);
@@ -64,9 +76,10 @@ function trustSettings(bundle, empty, env = process.env) {
     CURL_CA_BUNDLE: bundle, CARGO_HTTP_CAINFO: bundle,
     NPM_CONFIG_CAFILE: bundle, npm_config_cafile: bundle,
     NPM_CONFIG_STRICT_SSL: 'true', npm_config_strict_ssl: 'true',
-    GIT_CONFIG_COUNT: String(count + 2),
-    [`GIT_CONFIG_KEY_${count}`]: 'http.schannelUseSSLCAInfo', [`GIT_CONFIG_VALUE_${count}`]: 'true',
-    [`GIT_CONFIG_KEY_${count + 1}`]: 'http.sslVerify', [`GIT_CONFIG_VALUE_${count + 1}`]: 'true',
+    GIT_CONFIG_COUNT: String(count + git.length),
+    ...Object.fromEntries(git.flatMap(([key, value], offset) => [
+      [`GIT_CONFIG_KEY_${count + offset}`, key], [`GIT_CONFIG_VALUE_${count + offset}`, value],
+    ])),
   };
 }
 
