@@ -128,7 +128,25 @@ jobs:
             if (!env.GITHUB_SERVER_URL || !env.GITHUB_REPOSITORY) return [];
             const repository = new URL(`${env.GITHUB_SERVER_URL.replace(/\/+$/, '')}/${env.GITHUB_REPOSITORY}`);
             if (repository.username || repository.password) throw new Error('GitHub server URL must not contain credentials.');
-            return repository.protocol === 'https:' ? [repository.href, `${repository.href}.git`] : [];
+            if (repository.protocol !== 'https:') return [];
+            return [repository.href, `${repository.href}.git`].map(url => {
+              let effective = url;
+              try {
+                // This expands insteadOf without connecting. Trust must match Git's actual destination.
+                effective = execFileSync('git', ['ls-remote', '--get-url', url],
+                  { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+              } catch (error) {
+                if (error.code !== 'ENOENT') throw new Error('Cannot resolve the Git repository URL.');
+              }
+              effective = effective.replace(/^(?:http|https|ftp|ftps)::(?=https?:\/\/)/i, '');
+              if (!/^https?:\/\//i.test(effective)) return url; // SSH/local rewrites do not use HTTP trust.
+              try { new URL(effective); } catch { throw new Error('Invalid effective Git HTTP URL.'); }
+              // Keep Git-significant username escaping; never copy a rewritten password to argv or workflow env.
+              return effective.replace(/^([a-z][a-z0-9+.-]*:\/\/)([^/?#]*)/i, (_, prefix, authority) => {
+                const at = authority.lastIndexOf('@');
+                return at < 0 ? prefix + authority : prefix + authority.slice(0, at).split(':', 1)[0] + '@' + authority.slice(at + 1);
+              });
+            });
           }
 
           function trustSettings(bundle, empty, env = process.env, selectedGit = []) {

@@ -399,13 +399,65 @@ it('does not turn Node-only extra CAs into default Git authorities', async t => 
       'The extra CA remains available to Node under its own policy.');
     const result = await execute({ ...env, ...settings });
     assert.ok(Number.isInteger(result?.code) && !result.killed, result?.message);
-    assert.equal(requests, 0, `Git must not gain a Node-only CA; proxyAuth=${authorization !== undefined}: ${result.stderr}`);
+    assert.equal(requests, 0, `Git must not gain a Node-only CA; authSent=${authorization !== undefined}: ${result.stderr}`);
     assert.equal(authorization, undefined);
     assert.match(result.stderr, /certificate|SSL|issuer|trust|schannel/i);
     const selected = (await promisify(execFile)('git', ['config', '--get-urlmatch', 'http.sslCAInfo', remote],
       { env: { ...env, ...settings }, cwd: root })).stdout.trim();
     assert.ok(!certificates(await readFile(selected, 'utf8')).some(pem => key(pem) === key(privateCA)));
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+});
+
+it('filters the actual Git rewrite destination without exporting rewritten passwords', async t => {
+  const root = await temporary(t), config = path.join(root, 'gitconfig'), ca = path.join(root, 'raw.pem');
+  await writeFile(ca, [privateCA, ...incidents.map(c => c.pem)].join('\n'));
+  const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+    !/^(?:git_config(?:_.+)?|git_ssl_(?:no_verify|cainfo|capath)|git_proxy_ssl_cainfo|https?_proxy|all_proxy|no_proxy)$/i.test(name)));
+  Object.assign(clean, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config, NO_PROXY: 'localhost,127.0.0.1',
+    no_proxy: 'localhost,127.0.0.1', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' });
+  const alias = 'https://rewrite-fixture.invalid', password = 'rewritten-fixture-secret', username = "it's=enterprise";
+  const platform = process.platform === 'win32' ? ['-c', 'http.sslBackend=openssl'] : [];
+  for (const helper of ['', 'https::']) for (const filename of
+    ['registry-server.pem', 'incident-server-emudhra.pem', 'incident-server-aaa.pem']) {
+    let requests = 0, authorization;
+    const cert = await readFile(path.join(fixture, filename)), leaf = new X509Certificate(cert), now = Date.now();
+    assert.ok(Date.parse(leaf.validFrom) <= now && now < Date.parse(leaf.validTo), `${filename} must be currently valid`);
+    const server = https.createServer({ key: await readFile(path.join(fixture, 'registry-server-key.pem')), cert }, (request, response) => {
+      requests++; authorization = request.headers.authorization;
+      response.writeHead(404); response.end('fixture repository not found');
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const target = `https://${username}:${password}@localhost:${server.address().port}/`;
+      const scope = `https://${username}@localhost:${server.address().port}/owner/`;
+      await writeFile(config, `[url "${helper}${target}"]\n insteadOf=${alias}/\n[http "${scope}"]\n sslCAInfo=${JSON.stringify(ca)}\n[http]\n extraHeader=Authorization: Bearer rewrite-fixture\n`);
+      const env = { ...clean, GITHUB_SERVER_URL: alias, GITHUB_REPOSITORY: 'owner/fixture' };
+      const settings = prepareTrust({ env, directory: path.join(root, `${helper ? 'forced' : 'normal'}-${filename}`), npmInputs: null });
+      assert.ok(!JSON.stringify(settings).includes(password), 'Rewritten passwords must not enter exported settings.');
+      for (const suffix of ['', '.git']) {
+        const remote = `${alias}/owner/fixture${suffix}`;
+        const execute = child => promisify(execFile)('git', [...platform, 'ls-remote', remote],
+          { env: child, cwd: root, timeout: 10000 }).then(() => null, error => error);
+        requests = 0; authorization = undefined;
+        const before = await execute(env);
+        assert.ok(Number.isInteger(before?.code) && !before.killed, before?.message);
+        assert.ok(requests > 0, `${helper}/${filename}${suffix}: ${before?.stderr}`);
+        assert.equal(authorization, 'Bearer rewrite-fixture');
+        requests = 0; authorization = undefined;
+        const result = await execute({ ...env, ...settings });
+        assert.ok(Number.isInteger(result?.code) && !result.killed, result?.message);
+        if (filename === 'registry-server.pem') {
+          assert.ok(requests > 0, result?.stderr);
+          assert.equal(authorization, 'Bearer rewrite-fixture');
+          assert.match(result.stderr, /404|not found/i);
+        } else {
+          assert.equal(requests, 0, `${helper}/${filename}${suffix}: ${result?.stderr}`);
+          assert.equal(authorization, undefined);
+          assert.match(result.stderr, /certificate|SSL|issuer|trust|schannel|revok/i);
+        }
+      }
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+  }
 });
 
 it('filters explicit Git CA directories without widening trust through hash gaps and rejects empty selected files', async t => {

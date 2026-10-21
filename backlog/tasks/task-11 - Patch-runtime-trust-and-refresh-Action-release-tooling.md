@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-21T13:05:00Z'
-updated_date: '2026-10-21T16:40:00Z'
+updated_date: '2026-10-21T16:53:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -96,4 +96,6 @@ Coordinated native HTTPS proxy review: real Git still accepted the emudhra proxy
 Final native-proxy platform review: hosted Ubuntu Git 2.55 proved that an empty proxy CAfile can return zero imported anchors and still use the system CA directory. Replaced that policy with an unusable child path beneath an owned regular markerfile (ENOTDIR); no caller proxy CA path is read. Windows paired raw/guard controls use the real Git OpenSSL backend because Schannel can already revoke incident roots independently; additional Schannel guarded cases require the owned-path loader error, zero proxy HTTP/auth and no timeout. Direct HTTPS and authenticated HTTP CONNECT remain supported. 50 local Node tests and six strict YAML documents pass; final exact-head hosted/review/publication gates remain pending.
 
 Shared native-Git default-trust review: keep Node/npm policies separate from Git. Added a 9-line Git-specific OS-system fallback only for repository URL forms with no explicit selected Git CA file; explicit Git CA files/directories and unrelated remotes retain their filtered policies. A real NodeExtra-only private CA regression proves plain Git rejects the peer and the Action must also send zero HTTP/auth. Reverting only the production narrowing reproduces one authenticated HTTP request. Final local 51 Node tests pass; six strict YAML documents and diff check pass. New exact-head hosted matrices, Groma0.7.4 smoke and completed code/security reviews remain required. No backend-discovery framework or global runtime trust rewrite was added.
+
+Confirmed Git insteadOf sibling gap fixed with native ls-remote --get-url (no connection): select effective HTTP(S) destinations for the existing CA/default/strict settings, strip only four bundled curl-helper aliases, and omit rewritten passwords while preserving raw username spelling. SSH/local rewrites retain existing flow; actual checkout/push URL arguments and authentication scopes stay unchanged. New real normal/forced rewrite controls exercise both GitHub URL forms, private positive and both incident zero-HTTP negatives, raw equals/apostrophe username and password exclusion from exported settings. Reverting only effective-URL resolution reproduces one incident HTTP request. Final 52 local Node tests and six strict YAML documents pass; independent Groma-agent review found no concern. Hosted exact-head checks, CLI0.7.4 smoke and current reviews still gate release. No further exploratory source work is planned.
 <!-- SECTION:NOTES:END -->
