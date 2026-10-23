@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-23T17:58:00Z'
-updated_date: '2026-10-23T18:07:00Z'
+updated_date: '2026-10-23T18:10:00Z'
 labels: []
 dependencies: []
 references:
@@ -55,4 +55,6 @@ Cold simplicity review found no blockers and confirmed that separate Node setup 
 Full-context complexity review found no blockers. Accepted its scoped simplification: installation settings are already Node/npm-only, so installGroma no longer filters Git keys or removes the caller GIT_SSL_NO_VERIFY value from its child environment. Its npm command still explicitly enables strict SSL. Updated the existing command-observation test to prove inherited Git values survive. Public composites preserve caller Git policy; example workflows explicitly choose their own strict checkout policy.
 
 Final full local Action suite after the accepted simplification:58 passed,0 failed. No source changes followed it. Publication and exact released-CLI three-platform smoke remain gated until Groma0.7.7 is available.
+
+Final workflow portability review found that the old Linux-only comparison smoke used sed -i, which is not portable to macOS. Replaced that fixture edit with Node file I/O for the newly required three-platform smoke. No product behavior, test assertions or timeout changed.
 <!-- SECTION:NOTES:END -->

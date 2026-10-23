@@ -413,7 +413,8 @@ jobs:
           git add groma src examples
           git commit -m 'Before'
           echo "from=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          sed -i "s/return 'catalog'/return 'updated catalog'/" src/client.js
+          node --input-type=module -e 'import {readFileSync, writeFileSync} from "node:fs";
+            writeFileSync("src/client.js", readFileSync("src/client.js", "utf8").replace("catalog", "updated catalog"));'
           git add src/client.js
           git commit -m 'After'
           echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
