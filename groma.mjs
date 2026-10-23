@@ -1,11 +1,15 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 
-const execute = promisify(execFile);
-
-/** Start the npm launcher directly; Windows command wrappers are not executables. */
+/** Start the npm launcher directly and stream scanner output without a buffer limit. */
 export function runGroma(args, options = {}) {
   const launcher = (options.env ?? process.env).GROMA_CLI;
   if (!launcher) throw new Error('Install Groma before running the Action.');
-  return execute(process.execPath, [launcher, ...args], options);
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [launcher, ...args], { stdio: 'inherit', ...options });
+    child.once('error', reject);
+    child.once('close', (code, signal) => {
+      if (code === 0) resolve();
+      else reject(Object.assign(new Error(`Groma exited with ${signal ?? code}.`), { code, signal }));
+    });
+  });
 }
