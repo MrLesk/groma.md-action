@@ -41,7 +41,11 @@ export function prepareInstallationTrust() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (process.argv[2] === 'install') installGroma(process.env.GROMA_VERSION, prepareInstallationTrust());
+  if (process.argv[2] === 'install') {
+    installGroma(process.env.GROMA_VERSION, prepareInstallationTrust());
+    const launcher = path.join(trust.nativeNpm(['root', '--global']), 'groma.md', 'cli.cjs');
+    exportSettings({ GROMA_CLI: launcher }, process.env.GITHUB_ENV);
+  }
   else if (process.argv[2]) throw new Error('Usage: prepare-trust.mjs [install]');
   else exportSettings(prepareTrust(), process.env.GITHUB_ENV);
 }
