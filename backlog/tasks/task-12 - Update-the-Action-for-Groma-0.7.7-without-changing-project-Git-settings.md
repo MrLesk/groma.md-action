@@ -1,11 +1,11 @@
 ---
 id: TASK-12
 title: Update the Action for Groma 0.7.7 without changing project Git settings
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-23T17:58:00Z'
-updated_date: '2026-10-23T19:16:00Z'
+updated_date: '2026-10-23T19:28:00Z'
 labels: []
 dependencies: []
 references:
@@ -46,9 +46,9 @@ The Action must adopt the coordinated Groma hotfix while keeping its Node/npm do
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The Action default and documented examples use published Groma0.7.7 and npm12.2.1 for installation.
-- [ ] #2 Public Action setup and Groma installation do not export Git or generic native TLS overrides into later project commands; native Git proxy and CA settings remain unchanged.
-- [ ] #3 The Action check suite and real CLI export smoke pass on Windows Linux and macOS before one stable patch release advances v1.
+- [x] #1 The Action default and documented examples use published Groma0.7.7 and npm12.2.1 for installation.
+- [x] #2 Public Action setup and Groma installation do not export Git or generic native TLS overrides into later project commands; native Git proxy and CA settings remain unchanged.
+- [x] #3 The Action check suite and real CLI export smoke pass on Windows Linux and macOS before one stable patch release advances v1.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -85,4 +85,12 @@ The first released-CLI matrix exposed Windows npm-command startup failure in sca
 Final launcher P2 is fixed: spawn now inherits streams by default instead of buffering execFile output. The extended process regression failed before the fix with ERR_CHILD_PROCESS_STDIO_MAXBUFFER when the child wrote2MiB; after the fix all output reaches the owned descriptor, literal arguments and Git settings survive, and child exit6 remains the reported failure. Full local suite again passes62 tests. Targeted specification/quality review found no further regression in the changed launcher: no shell, no command-wrapper dependency, no fixed output buffer, and error/close events determine completion.
 
 Windows export now starts correctly and caught a separate input-boundary defect: Git Bash converts the root-relative /examples/ environment pattern into a native path. The prepare command now opts only GROMA_EXCLUDE out of that conversion, preserving any existing conversion-exclusion list. MSYS2 authoritative path documentation supports this fix. Existing end-to-end verification remains unchanged and requires exactly the two selected source files, excluding examples/demo.js. No root CLI change or new Groma release is needed.
+
+Release complete: exact source de3067b passed unit and real Groma0.7.7 export/committed-comparison smoke on Windows/Linux/macOS in40010143214. PR11 merged as c9cb937; its tree exactly matches that tested source. One full Actionv1.2.3 release is published at https://github.com/MrLesk/groma.md-action/releases/tag/v1.2.3 and its Marketplace badge is visible after Alex completed GitHubMobile verification. Release40010793051 repeated all six checks successfully and advanced v1 to c9cb937; main CI40010761089 also passed. All three relevant review threads are resolved. The final small Windows pattern fix preserves the existing end-to-end source assertion; all62 local tests pass. Final supported flow: prepare Node trust, install the exact CLI and expose its launcher path, prepare project inputs without shell path conversion, invoke the launcher with streamed output, then export/compare. npm and the token-bearing publisher own their child trust settings. Project Git remains under the caller native policy. No extra release or prerelease was created.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Released Actionv1.2.3 using Groma0.7.7 and npm12.2.1, published it to Marketplace and advanced v1 after all Windows/Linux/macOS unit and real CLI checks passed. Fixed Windows npm launcher startup and ignore-pattern conversion, retained streamed scanner output, isolated Node trust, and kept publisher token checks inside its own Git child. All62 local tests pass; relevant review findings have failing-before/passing-after evidence. Project Git settings are not exported or repaired.
+<!-- SECTION:FINAL_SUMMARY:END -->
