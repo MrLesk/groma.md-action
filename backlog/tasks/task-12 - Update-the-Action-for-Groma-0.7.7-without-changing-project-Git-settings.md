@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-23T17:58:00Z'
-updated_date: '2026-10-23T19:14:00Z'
+updated_date: '2026-10-23T19:16:00Z'
 labels: []
 dependencies: []
 references:
@@ -63,6 +63,8 @@ The first real Windows CLI smoke reproduced spawnSync groma ENOENT in scan.mjs: 
 Security review identified a supported publication regression: the public publisher sends its own write token through Git but no longer applies its previous filtered trust when invoked without the example bootstrap. Preserve strict trust only within the publisher-owned Git child, without exporting settings or changing project Git. Existing token tests prepare trust outside storeSite and miss this entry path. Add one real storeSite child-process regression: a private-root endpoint receives the scoped token, while an incident endpoint receives no HTTP request. This restores the publisher own boundary; project scanner Git still follows native policy.
 
 Launcher review found a regression against the previous scan flow: async execFile ignores stdio inheritance and aborts output above1MiB. Streaming successful scanner output to workflow logs is existing behavior. Change the shared launcher to spawn with inherited streams and extend its real process regression with2MiB of output directed to an owned log descriptor. It must preserve all output, literal arguments, inherited Git settings and the nonzero child result without buffering in the launcher.
+
+The next Windows smoke reached export and found examples/demo.js incorrectly included despite the /examples/ exclusion. Git Bash converts path-looking environment values before starting native Node; MSYS2 documents this behavior. Preserve GROMA_EXCLUDE verbatim at the prepare.mjs launch by extending the caller existing MSYS2_ENV_CONV_EXCL list for this one variable. The existing real-export assertion already detects the incorrect source inventory, so no extra text-inventory or mocked unit test is needed.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -81,4 +83,6 @@ Relevant final code-review P1 reproduced with the installed Node24.13.0: inherit
 The first released-CLI matrix exposed Windows npm-command startup failure in scan.mjs (spawnSync groma ENOENT); unit mocks and shell version checks could not detect it. Installation now exports the exact installed CommonJS launcher path. groma.mjs starts that file with the selected Node executable for both scan and comparison, without a shell or duplicated platform selection. A real process regression verifies a spaced launcher path, literal shell characters, empty PATH, native Git CA/proxy inheritance and nonzero exit propagation. The publisher security finding is also fixed at its own boundary: storeSite prepares strict filtered trust only for its token-bearing Git child, never GITHUB_ENV. Its regression failed before the fix because the incident server received the fixture token; after the fix the incident server gets no request and a valid private server receives the scoped token. This restores the existing privileged publication guarantee while project Git remains native. Final local check: all62 tests pass. Implementer specification/quality re-review covers only these findings and resulting changes: installation owns the launcher path, one shared operation launches it on all systems, and publisher trust stays with the component that owns the write token. No shell execution, extra dependency or caller configuration mutation was added.
 
 Final launcher P2 is fixed: spawn now inherits streams by default instead of buffering execFile output. The extended process regression failed before the fix with ERR_CHILD_PROCESS_STDIO_MAXBUFFER when the child wrote2MiB; after the fix all output reaches the owned descriptor, literal arguments and Git settings survive, and child exit6 remains the reported failure. Full local suite again passes62 tests. Targeted specification/quality review found no further regression in the changed launcher: no shell, no command-wrapper dependency, no fixed output buffer, and error/close events determine completion.
+
+Windows export now starts correctly and caught a separate input-boundary defect: Git Bash converts the root-relative /examples/ environment pattern into a native path. The prepare command now opts only GROMA_EXCLUDE out of that conversion, preserving any existing conversion-exclusion list. MSYS2 authoritative path documentation supports this fix. Existing end-to-end verification remains unchanged and requires exactly the two selected source files, excluding examples/demo.js. No root CLI change or new Groma release is needed.
 <!-- SECTION:NOTES:END -->

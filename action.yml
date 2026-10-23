@@ -86,7 +86,8 @@ runs:
         GROMA_EXCLUDE: ${{ inputs.exclude }}
         GROMA_FROM: ${{ inputs.from }}
         GROMA_REVISION: ${{ inputs.revision }}
-      run: node "$GITHUB_ACTION_PATH/prepare.mjs"
+      # A leading slash in an ignore pattern is not a Windows filesystem path.
+      run: MSYS2_ENV_CONV_EXCL="${MSYS2_ENV_CONV_EXCL:+$MSYS2_ENV_CONV_EXCL;}GROMA_EXCLUDE" node "$GITHUB_ACTION_PATH/prepare.mjs"
 
     - name: Cache scanner packages
       env:
