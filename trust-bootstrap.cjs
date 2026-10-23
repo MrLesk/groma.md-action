@@ -122,7 +122,7 @@ function repositoryURLs(env) {
 function trustSettings(bundle, empty, env = process.env, selectedGit = []) {
   const git = [['http.schannelUseSSLCAInfo', 'true'], ['http.sslVerify', 'true']];
   // Limit checkout/publication defaults to this repository. Other Git remotes
-  // retain their own CA policy, which Groma filters before scanner downloads.
+  // retain their own native Git CA policy.
   for (const url of repositoryURLs(env)) {
     git.push([`http.${url}.sslVerify`, 'true'], [`http.${url}.schannelUseSSLCAInfo`, 'true'],
       [`http.${url}.sslCAInfo`, bundle], [`http.${url}.sslCAPath`, empty]);
@@ -277,11 +277,18 @@ function prepareTrust({ env = process.env, bundled = tls.rootCertificates,
 
 // Composite actions run this with the runner's own Node before setup-node. npm
 // is not available yet, and its original CA configuration must survive until setup.
-function prepareWorkflowTrust(options = {}) {
-  const settings = prepareTrust({ ...options, npmInputs: null });
-  delete settings.NPM_CONFIG_CAFILE;
-  delete settings.npm_config_cafile;
-  return settings;
+function prepareWorkflowTrust({ env = process.env, bundled = tls.rootCertificates,
+  getCertificates = tls.getCACertificates?.bind(tls), read = fs.readFileSync,
+  directory = fs.mkdtempSync(path.join(env.RUNNER_TEMP || os.tmpdir(), 'groma-node-tls-')) } = {}) {
+  const inputs = [...bundled];
+  if (getCertificates) for (const kind of ['default', 'system', 'extra']) inputs.push(...getCertificates(kind));
+  for (const key of ['SSL_CERT_FILE', 'NODE_EXTRA_CA_CERTS']) {
+    if (env[key]) inputs.push(read(env[key], 'utf8'));
+  }
+  const bundle = path.join(directory, 'node-ca.pem');
+  fs.writeFileSync(bundle, filterAuthorities(inputs), { mode: 0o600 });
+  // These Node-only settings leave Git and other native tools under caller control.
+  return { NODE_EXTRA_CA_CERTS: bundle, NODE_USE_SYSTEM_CA: '0', NODE_TLS_REJECT_UNAUTHORIZED: '1' };
 }
 
 function exportSettings(settings, filename) {
