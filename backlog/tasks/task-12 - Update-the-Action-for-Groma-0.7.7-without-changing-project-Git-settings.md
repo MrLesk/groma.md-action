@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-23T17:58:00Z'
-updated_date: '2026-10-23T18:10:00Z'
+updated_date: '2026-10-23T19:07:00Z'
 labels: []
 dependencies: []
 references:
@@ -24,6 +24,8 @@ modified_files:
   - examples/pull-request.yml
   - README.md
   - CONTRIBUTING.md
+  - test/workflow-node-trust.test.mjs
+  - publish/action.yml
 type: bug
 ordinal: 12000
 ---
@@ -45,6 +47,8 @@ The Action must adopt the coordinated Groma hotfix while keeping its Node/npm do
 
 <!-- SECTION:PLAN:BEGIN -->
 Keep the repositories own hosted checkout and release trust preparation. Narrow the public composite setup bootstrap to Node certificate settings only and stop exporting npm installation child settings to the workflow. This fixes the reproduced public Action environment problem without replacing user Git configuration or adding fallback behavior. Update the existing bootstrap test to assert no Git or generic native TLS override is exported and keep existing owned-download tests. Update CLI and npm patch pins, run tests, then verify the real released CLI smoke on three platforms and publish one Action release.
+
+Final code-review regression: Action-owned Node downloads must reject the incident certificate even when inherited OpenSSL trust contains it, while native Git retains caller policy. The reviewer reproduced a connection accepted through the inherited store because NODE_EXTRA_CA_CERTS is additive. Existing bundle-content and npm tests do not exercise this Node HTTPS path. Add one network test with private-root success, incident rejection and an unfiltered-store control. Scope filtered OpenSSL settings to third-party Node steps; scripts running the pinned patched Node use its bundled roots plus filtered private authorities. Keep Git and generic TLS settings out of GITHUB_ENV.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -57,4 +61,6 @@ Full-context complexity review found no blockers. Accepted its scoped simplifica
 Final full local Action suite after the accepted simplification:58 passed,0 failed. No source changes followed it. Publication and exact released-CLI three-platform smoke remain gated until Groma0.7.7 is available.
 
 Final workflow portability review found that the old Linux-only comparison smoke used sed -i, which is not portable to macOS. Replaced that fixture edit with Node file I/O for the newly required three-platform smoke. No product behavior, test assertions or timeout changed.
+
+Relevant final code-review P1 reproduced with the installed Node24.13.0: inherited incident OpenSSL trust accepted the HTTPS request, so the new rejection check failed before the fix. Patched Node26.12.1 independently rejects that incident chain. prepareWorkflowTrust now separates Node workflow settings from OpenSSL step settings. Both public composites export only Node settings. setup-node/cache/Pages Node actions receive the filtered CA file and empty CA directory within their own steps; scripts use the pinned patched Node bundled store plus filtered private authorities. No native Git or generic TLS override enters project commands. The setup regression passes with the older runner Node24 after the fix. Full Action suite passes all60 tests with Node26.12.1, including private-root success and incident rejection for both Node entry paths. Specification and quality re-review is limited to the P1 and these changes: the two trust scopes have named owners, original settings survive, and no preload module, caller configuration repair, compatibility layer or new dependency was added.
 <!-- SECTION:NOTES:END -->

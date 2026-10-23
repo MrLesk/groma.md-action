@@ -309,10 +309,14 @@ jobs:
             for (const key of ['SSL_CERT_FILE', 'NODE_EXTRA_CA_CERTS']) {
               if (env[key]) inputs.push(read(env[key], 'utf8'));
             }
-            const bundle = path.join(directory, 'node-ca.pem');
+            const bundle = path.join(directory, 'node-ca.pem'), empty = path.join(directory, 'empty');
             fs.writeFileSync(bundle, filterAuthorities(inputs), { mode: 0o600 });
-            // These Node-only settings leave Git and other native tools under caller control.
-            return { NODE_EXTRA_CA_CERTS: bundle, NODE_USE_SYSTEM_CA: '0', NODE_TLS_REJECT_UNAUTHORIZED: '1' };
+            fs.mkdirSync(empty, { recursive: true });
+            // Export only Node settings. OpenSSL settings belong to individual Node-action steps.
+            return {
+              node: { NODE_EXTRA_CA_CERTS: bundle, NODE_USE_SYSTEM_CA: '0', NODE_TLS_REJECT_UNAUTHORIZED: '1' },
+              openssl: { SSL_CERT_FILE: bundle, SSL_CERT_DIR: empty },
+            };
           }
 
           function exportSettings(settings, filename) {

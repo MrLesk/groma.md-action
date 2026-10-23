@@ -25,14 +25,14 @@ export function installGroma(version, settings, { env = process.env, execute = r
   }
   const cafile = settings.NPM_CONFIG_CAFILE;
   const args = installArguments(`groma.md@${version}`, cafile);
-  const strict = { ...env, ...settings, NODE_OPTIONS: '--use-openssl-ca' };
+  const strict = { ...env, ...settings, NODE_OPTIONS: '--use-bundled-ca' };
   execute(installArguments('npm@12.2.1', cafile), strict);
   execute(args, strict);
 }
 
 /** Native Git belongs to the project; only npm and Node receive installation trust. */
 export function prepareInstallationTrust() {
-  const settings = prepareWorkflowTrust();
+  const { node: settings } = prepareWorkflowTrust();
   const selected = npmAuthorities();
   const cafile = path.join(path.dirname(settings.NODE_EXTRA_CA_CERTS), 'npm-ca.pem');
   if (selected !== null) writeFileSync(cafile, filterAuthorities(selected), { mode: 0o600 });
