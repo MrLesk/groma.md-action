@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-25T19:08:00Z'
-updated_date: '2026-10-25T19:09:00Z'
+updated_date: '2026-10-25T19:44:00Z'
 labels: []
 dependencies: []
 references:
@@ -17,6 +17,7 @@ modified_files:
   - README.md
   - CONTRIBUTING.md
   - .github/workflows/check.yml
+  - backlog/tasks/task-13 - Release-the-Action-with-Groma-0.7.8.md
 type: chore
 ordinal: 13000
 ---
@@ -29,9 +30,10 @@ The Groma release checklist requires the Action default to adopt each successful
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The Action default, README and release checklist use Groma 0.7.8, and real CLI smoke checks require that version.
-- [ ] #2 The local check suite and exact-candidate Windows, Linux and macOS checks and real CLI smoke pass after Groma 0.7.8 is published.
-- [ ] #3 One stable Action patch release is published from the tested commit and its release workflow advances v1 after all checks pass.
+- [x] #1 The Action default, README and release checklist use Groma 0.7.8, and real CLI smoke checks require that version.
+- [x] #2 The local check suite and exact-candidate Windows, Linux and macOS checks and real CLI smoke pass after Groma 0.7.8 is published.
+- [x] #3 One stable Action patch release is published from the tested commit and its release workflow advances v1 after all checks pass.
+- [ ] #4 The Action release is published to GitHub Marketplace as required by the release checklist.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -49,4 +51,8 @@ Prepare the version-pin PR as a draft while CLI publication runs. The existing w
 
 <!-- SECTION:NOTES:BEGIN -->
 Local npm run check passed all 62 tests with Node 26.12.1 and npm 12.2.1; git diff --check passed. This small update changes only the CLI version pin, README/checklist versions and the existing smoke commands selected CLI version. No assertions, runtime logic, trust policy or scenarios changed. Implementer specification/quality review of the pin change found no blocker; exact-candidate CI and publication are still pending. No new tests or separate architecture/simplicity agents are needed for this constant-and-documentation update.
+
+Groma v0.7.8 release 40224391938 passed all jobs, published all five platform packages and the wrapper, attached five binaries plus SHA256SUMS, and synced main to 0.7.8. npm confirms the exact wrapper and platform versions. A temporary install with lifecycle scripts disabled reports 0.7.8 and successfully creates/resolves the Unicode actor Студент / студент. The initial package/platform 404 responses cleared as registry metadata became available; no source changes or extra release were made. The required post-release architecture workflow 40226265844 passed, including PR186 comparison.
+Action candidate b0f615f passed all six unit and real npm/export/comparison gates on Windows, Linux and macOS in 40226263430. PR12 merged as 52a5085b63352de92ae1bea052d069b6bd0b3553; its tree exactly equals the tested candidate tree 546e1d424e7b71816ed4f4d6355c71c0d08bd905. Stable GitHub Release v1.2.4 is published at https://github.com/MrLesk/groma.md-action/releases/tag/v1.2.4. Release run 40226808215 repeated all six gates successfully and its release-tag job advanced v1 to exactly 52a5085b63352de92ae1bea052d069b6bd0b3553. No raw tag push, extra release, package-version bump or runtime/trust change was made.
+Marketplace publication remains pending, so the task stays In Progress. The public v1.2.3 page has the release Marketplace badge; v1.2.4 does not. Browser startup fails before page access with Importing module node:process is not allowed; resetting the control session did not fix it. The Computer Use runtime also could not load. The user explicitly requested the agent finish through the browser; no Marketplace UI change or verification was performed. A working browser-control connection is needed to edit this existing release, enable Publish this Action to the GitHub Marketplace, and save it. This remaining gate comes from CONTRIBUTING.md Releases, not a new product requirement.
 <!-- SECTION:NOTES:END -->
