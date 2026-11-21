@@ -16,11 +16,11 @@ inputs:
     description: Publication theme (auto, light, dark, or blueprint).
     default: auto
   exclude:
-    description: Additional scan exclusion patterns, one per line. For single-checkout builds only.
+    description: Additional scan exclusion patterns, one per line. Only applies to scans.
   from:
     description: Earlier commit to compare. Requires revision.
   revision:
-    description: Later commit to compare. Requires from.
+    description: Commit to export. With from, this is the later commit to compare.
 
 outputs:
   output:
@@ -60,21 +60,27 @@ runs:
         package-manager-cache: false
 
     - name: Install Groma
-      id: groma
       shell: bash
       env:
         NODE_OPTIONS: --use-bundled-ca
         GROMA_VERSION: ${{ inputs.groma-version }}
+      run: node "$GITHUB_ACTION_PATH/prepare-trust.mjs" install
+
+    - name: Verify Groma installation
+      id: groma
+      shell: bash
+      env:
+        NODE_OPTIONS: --use-bundled-ca
       run: |
-        node "$GITHUB_ACTION_PATH/prepare-trust.mjs" install
-        echo "version=$(groma --version)" >> "$GITHUB_OUTPUT"
+        version=$(node "$GROMA_CLI" --version)
+        printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
     - name: Read project configuration
       env:
         NODE_OPTIONS: --use-bundled-ca
       if: inputs.from == '' && inputs.revision == ''
       shell: bash
-      run: groma plugin list
+      run: node "$GROMA_CLI" plugin list
 
     - name: Prepare project
       id: prepare
@@ -109,8 +115,8 @@ runs:
         GROMA_CONFIG: ${{ steps.prepare.outputs.config-file }}
       run: node "$GITHUB_ACTION_PATH/scan.mjs"
 
-    - name: Export committed comparison
-      if: inputs.from != '' && inputs.revision != ''
+    - name: Export committed architecture
+      if: inputs.revision != ''
       id: compare
       shell: bash
       env:

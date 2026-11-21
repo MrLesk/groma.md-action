@@ -9,20 +9,22 @@ if (!['auto', 'light', 'dark', 'blueprint'].includes(theme)) {
 }
 const from = process.env.GROMA_FROM ?? '';
 const revision = process.env.GROMA_REVISION ?? '';
-if (Boolean(from) !== Boolean(revision)) throw new Error('Supply both from and revision for a comparison.');
+if (from && !revision) throw new Error('Supply both from and revision for a comparison.');
 const patterns = (process.env.GROMA_EXCLUDE ?? '').split(/\r?\n/).filter(line => line.trim() !== '');
-if (from && patterns.length) throw new Error('Comparison uses committed architecture; exclude only applies to scanning.');
-
-const directories = ['groma', '.groma'].filter(directory => existsSync(directory));
-if (directories.length > 1) throw new Error('Both groma/ and .groma/ exist; keep one Groma directory.');
-const directory = directories[0];
-if (!directory || !['index.md', 'project.md'].every(file => existsSync(path.join(directory, file)))) {
-  throw new Error('Initialize Groma locally with groma init and commit its project files before using this Action.');
+if (revision && patterns.length) {
+  throw new Error('This export uses committed architecture; exclude only applies to scanning.');
 }
 
 let scannerKey = '';
 let configFile = '';
-if (!from) {
+if (!revision) {
+  const directories = ['groma', '.groma'].filter(directory => existsSync(directory));
+  if (directories.length > 1) throw new Error('Both groma/ and .groma/ exist; keep one Groma directory.');
+  const directory = directories[0];
+  if (!directory || !['index.md', 'project.md'].every(file => existsSync(path.join(directory, file)))) {
+    throw new Error('Initialize Groma locally with groma init and commit its project files before using this Action.');
+  }
+
   const filename = path.join(directory, 'config.json');
   configFile = filename;
   const config = JSON.parse(await readFile(filename, 'utf8'));

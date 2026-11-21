@@ -33,12 +33,16 @@ export function summarize(payload) {
 
 // The empty working root has no plugin configuration. Git still reads the existing
 // repository's committed architecture and source, without loading project scanner hooks.
-export async function exportComparison({ repositoryRoot, directory, from, revision, execute = runGroma }) {
+export async function exportCommitted({ repositoryRoot, directory, from, revision, execute = runGroma }) {
   const { stdout } = await run('git', ['rev-parse', '--absolute-git-dir'], { cwd: repositoryRoot });
-  const root = await mkdtemp(path.join(os.tmpdir(), 'groma-comparison-'));
+  const output = path.resolve(repositoryRoot, directory);
+  const args = ['export', output];
+  if (from) args.push('--from', from);
+  args.push('--revision', revision);
+  const root = await mkdtemp(path.join(os.tmpdir(), 'groma-committed-'));
   try {
     await mkdir(path.join(root, 'groma'));
-    await execute(['export', path.resolve(repositoryRoot, directory), '--from', from, '--revision', revision], {
+    await execute(args, {
       cwd: root,
       env: Object.fromEntries(Object.entries({ ...process.env, GIT_DIR: stdout.trim(), GIT_WORK_TREE: root })
         .filter(([key]) => key.toUpperCase() !== 'GIT_SSL_NO_VERIFY')),
@@ -46,6 +50,11 @@ export async function exportComparison({ repositoryRoot, directory, from, revisi
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+  return output;
+}
+
+export async function exportComparison(options) {
+  const directory = await exportCommitted(options);
   const payload = readPayload(await readFile(path.join(directory, 'index.html'), 'utf8'));
   const summary = summarize(payload);
   const filename = path.join(directory, 'comparison.json');
@@ -54,11 +63,16 @@ export async function exportComparison({ repositoryRoot, directory, from, revisi
 }
 
 if (process.argv[1] === import.meta.filename) {
-  const summary = await exportComparison({
+  const selection = {
     repositoryRoot: process.cwd(),
     directory: process.env.GROMA_EXPORT,
     from: process.env.GROMA_FROM,
     revision: process.env.GROMA_REVISION,
-  });
-  await appendFile(process.env.GITHUB_OUTPUT, `summary=${summary}\n`);
+  };
+  if (selection.from) {
+    const summary = await exportComparison(selection);
+    await appendFile(process.env.GITHUB_OUTPUT, `summary=${summary}\n`);
+  } else {
+    await exportCommitted(selection);
+  }
 }

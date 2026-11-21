@@ -98,25 +98,29 @@ describe('workflow configuration', { concurrency: true }, () => {
     await assert.rejects(prepare(root, '/examples/', 'sepia'), error => error.code !== 0 && error.stderr.includes('theme'));
     assert.equal(await readFile(filename, 'utf8'), before);
   });
-  it('requires both comparison commits and rejects scan exclusions without changing config', async t => {
+  it('requires a revision with from and rejects scan exclusions for committed exports', async t => {
     const root = await checkout(t);
     const filename = path.join(root, 'groma/config.json');
     const original = await readFile(filename, 'utf8');
     await assert.rejects(prepare(root, '', 'auto', { GROMA_FROM: 'base' }), /both from and revision/);
-    await assert.rejects(prepare(root, '', 'auto', { GROMA_REVISION: 'head' }), /both from and revision/);
-    const commits = { GROMA_FROM: 'base', GROMA_REVISION: 'head' };
-    await assert.rejects(prepare(root, 'src/', 'auto', commits), /committed architecture/);
-    await prepare(root, '', 'auto', commits);
+    for (const from of ['', 'base']) {
+      const revisions = { GROMA_FROM: from, GROMA_REVISION: 'head' };
+      await assert.rejects(prepare(root, 'src/', 'auto', revisions), /committed architecture/);
+      await prepare(root, '', 'auto', revisions);
+    }
     assert.equal(await readFile(filename, 'utf8'), original);
   });
 
-  it('prepares committed comparisons without changing project plugin configuration', async t => {
-    const root = await checkout(t);
-    const filename = path.join(root, 'groma/config.json');
-    const original = await readFile(filename, 'utf8');
-    const result = await prepare(root, '', 'blueprint', { GROMA_FROM: 'base', GROMA_REVISION: 'head' });
-    assert.equal(result['export-directory'], path.join(root, 'website root/architecture/blueprint'));
-    assert.equal(await readFile(filename, 'utf8'), original);
+  it('prepares committed exports without consulting the checkout', async t => {
+    const root = await checkout(t, false);
+    for (const from of ['', 'base']) {
+      const revisions = { GROMA_FROM: from, GROMA_REVISION: 'head' };
+      const result = await prepare(root, '', 'blueprint', revisions);
+      assert.equal(result['export-directory'], path.join(root, 'website root/architecture/blueprint'));
+      assert.equal(result['config-file'], '');
+      assert.equal(result['scanner-key'], '');
+    }
+    assert.deepEqual(await readdir(root), ['action-output']);
   });
 
 });

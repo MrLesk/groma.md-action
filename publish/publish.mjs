@@ -88,11 +88,18 @@ export async function assertDedicatedPages(owned, request = api) {
   }
 }
 
+function previewPaths(number, layout) {
+  if (layout === 'pr') return { directory: `pr-${number}`, source: '', map: 'architecture' };
+  if (layout === 'comparison') return { directory: `comparison/pr-${number}`, source: 'architecture', map: '' };
+  throw new Error('Choose a preview layout: pr or comparison.');
+}
+
 // Only this PR directory is replaced. The branch is also the durable copy of the whole site.
-export async function replacePreview(site, artifact, number) {
-  const destination = path.join(site, `pr-${number}`);
+export async function replacePreview(site, artifact, number, layout = 'pr') {
+  const preview = previewPaths(number, layout);
+  const destination = path.join(site, preview.directory);
   await rm(destination, { recursive: true, force: true });
-  await cp(artifact, destination, { recursive: true });
+  await cp(path.join(artifact, preview.source), destination, { recursive: true });
 }
 
 // The default-branch map lives at the site root, beside the pr-<number> previews.
@@ -136,7 +143,7 @@ export async function storeSite(context) {
     }
   }
   await assertDedicatedPages(exists);
-  if (context.number) await replacePreview(site, context.directory, context.number);
+  if (context.number) await replacePreview(site, context.directory, context.number, context.layout);
   else await replaceMap(site, context.directory);
   await writeFile(path.join(site, ownership), 'Groma PR previews\n');
   await writeFile(path.join(site, '.nojekyll'), '');
@@ -152,8 +159,9 @@ export async function storeSite(context) {
   await appendFile(process.env.GITHUB_OUTPUT, `ready=true\nsite=${site}\n`);
 }
 
-export async function publicationContext({ number, base, directory, theme }, request = api) {
+export async function publicationContext({ number, base, directory, theme, layout = 'pr' }, request = api) {
   if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Invalid PR number.');
+  const preview = previewPaths(number, layout);
   if (!/^[a-f0-9]{40}$/.test(base)) throw new Error('Invalid PR base commit.');
   if (!themes.includes(theme)) throw new Error('Invalid theme.');
   directory = path.resolve(directory);
@@ -163,7 +171,8 @@ export async function publicationContext({ number, base, directory, theme }, req
     console.log('A newer PR revision is available; this build will not be published.');
     return null;
   }
-  return { number, directory, theme, summary, revision: summary.revision };
+  return { number, directory, theme, layout, previewPath: path.posix.join(preview.directory, preview.map, theme),
+    summary, revision: summary.revision };
 }
 
 // Like a PR comparison, a map is published only while its commit is still the default-branch head.
@@ -186,14 +195,15 @@ if (process.argv[1] === import.meta.filename) {
   const theme = process.env.GROMA_THEME;
   // Without a PR number, the build is the default-branch map.
   const current = process.env.GROMA_PULL_REQUEST
-    ? await publicationContext({ number: Number(process.env.GROMA_PULL_REQUEST), base: process.env.GROMA_BASE, directory, theme })
+    ? await publicationContext({ number: Number(process.env.GROMA_PULL_REQUEST), base: process.env.GROMA_BASE,
+      directory, theme, layout: process.env.GROMA_PREVIEW_LAYOUT || undefined })
     : await mapContext({ revision: process.env.GROMA_REVISION, directory, theme });
   if (current && process.argv[2] === 'store') await storeSite(current);
   else if (current && process.argv[2] === 'link') {
     const site = process.env.GROMA_PAGE_URL.replace(/\/$/, '');
     let url = `${site}/architecture/${current.theme}/`;
     if (current.number) {
-      url = `${site}/pr-${current.number}/architecture/${current.theme}/?revision=${current.revision}&from=${current.summary.from}`;
+      url = `${site}/${current.previewPath}/?revision=${current.revision}&from=${current.summary.from}`;
       await updateComment(current.number, commentBody(current.summary, url, process.env.GITHUB_REPOSITORY));
     }
     await appendFile(process.env.GITHUB_OUTPUT, `url=${url}\n`);

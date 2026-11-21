@@ -16,6 +16,9 @@ inputs:
   theme:
     description: Theme used by the build Action.
     default: auto
+  preview-layout:
+    description: PR URL layout. Use pr for pr-N/architecture/THEME or comparison for comparison/pr-N/THEME.
+    default: pr
   token:
     description: GitHub token with contents write permission, plus pull-requests write for PR comparisons.
     required: true
@@ -56,6 +59,7 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
         GROMA_DIRECTORY: ${{ inputs.directory }}
         GROMA_THEME: ${{ inputs.theme }}
+        GROMA_PREVIEW_LAYOUT: ${{ inputs.preview-layout }}
         GROMA_PULL_REQUEST: ${{ inputs.pull-request }}
         GROMA_BASE: ${{ inputs.base }}
         GROMA_REVISION: ${{ inputs.revision }}
@@ -84,6 +88,7 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
         GROMA_DIRECTORY: ${{ inputs.directory }}
         GROMA_THEME: ${{ inputs.theme }}
+        GROMA_PREVIEW_LAYOUT: ${{ inputs.preview-layout }}
         GROMA_PULL_REQUEST: ${{ inputs.pull-request }}
         GROMA_BASE: ${{ inputs.base }}
         GROMA_REVISION: ${{ inputs.revision }}

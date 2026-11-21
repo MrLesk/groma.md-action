@@ -365,7 +365,6 @@ jobs:
       - uses: MrLesk/groma.md-action@v1
         id: map
         with:
-          groma-version: '0.7.7'
           from: ${{ steps.commits.outputs.from }}
           revision: ${{ steps.pull.outputs.head }}
       - uses: actions/upload-artifact@v7.0.2
@@ -385,7 +384,7 @@ jobs:
     # PR comparisons and the default-branch map share one Pages site. Serialize publication and retain every preview.
     concurrency:
       group: groma-pages
-      cancel-in-progress: false
+      queue: max
     environment:
       name: github-pages
       url: ${{ steps.preview.outputs.url }}

@@ -408,10 +408,17 @@ jobs:
           EXPORTED_SITE: ${{ steps.map.outputs.output }}/architecture/blueprint
         run: node .action/test/verify-export.mjs "$EXPORTED_SITE"
 
-      - name: Prepare committed comparison
+      - name: Prepare committed architecture with a Backlog work source
         id: commits
         shell: bash
         run: |
+          test -z "$(command -v backlog)"
+          node --input-type=module -e '
+            import {readFileSync, writeFileSync} from "node:fs";
+            const config = JSON.parse(readFileSync("groma/config.json"));
+            config.workSources = [{id: "backlog", version: "1.54.0"}];
+            writeFileSync("groma/config.json", JSON.stringify(config));
+          '
           git config user.name 'Groma fixture'
           git config user.email 'fixture@example.com'
           git add groma src examples
@@ -440,6 +447,21 @@ jobs:
             writeFileSync("groma/config.json", JSON.stringify(config));
           '
 
+      - name: Build committed map
+        id: committed
+        uses: ./.action
+        with:
+          output: committed-site
+          revision: ${{ steps.commits.outputs.revision }}
+
+      - name: Verify the committed map without Backlog
+        env:
+          EXPORTED_SITE: ${{ steps.committed.outputs.directory }}
+          REVISION: ${{ steps.commits.outputs.revision }}
+        run: |
+          test -z "$(command -v backlog)"
+          node .action/test/verify-export.mjs "$EXPORTED_SITE" committed "$REVISION"
+
       - name: Build committed comparison
         id: comparison
         uses: ./.action
@@ -456,6 +478,31 @@ jobs:
         env:
           EXPORTED_SITE: ${{ steps.comparison.outputs.directory }}
         run: node .action/test/verify-export.mjs "$EXPORTED_SITE" comparison
+
+      - name: Make the configured local scanner unavailable
+        if: runner.os == 'Linux'
+        run: mv fixture-scanner unavailable-fixture-scanner
+
+      - name: Run the live scan with the missing scanner
+        if: runner.os == 'Linux'
+        id: live-scan
+        continue-on-error: true
+        env:
+          NODE_OPTIONS: --use-bundled-ca
+          GROMA_CONFIG: groma/config.json
+          GROMA_EXPORT: failed-scan-site
+        run: node .action/scan.mjs
+
+      - name: Verify the comparison publishes after the failed scan
+        if: runner.os == 'Linux'
+        env:
+          SCAN_OUTCOME: ${{ steps.live-scan.outcome }}
+          PREVIOUS_MAP: ${{ steps.committed.outputs.output }}
+          COMPARISON_SITE: ${{ steps.comparison.outputs.output }}
+        run: |
+          test "$SCAN_OUTCOME" = failure
+          test ! -e failed-scan-site/index.html
+          node .action/test/verify-publication.mjs "$PREVIOUS_MAP" "$COMPARISON_SITE"
 
   release-tag:
     if: github.event_name == 'release' && !github.event.release.draft && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v1.')
