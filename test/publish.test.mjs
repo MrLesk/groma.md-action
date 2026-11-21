@@ -60,24 +60,27 @@ it('replaces one preview while preserving other PRs and removing obsolete files 
   await assert.rejects(readFile(path.join(site, 'pr-1/obsolete.html')), { code: 'ENOENT' });
 });
 
-it('replaces the root map while preserving PR previews, and PR previews keep the root map', { concurrency: true }, async t => {
+it('publishes to an existing comparison URL while retaining the map and other previews', { concurrency: true }, async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'groma-map-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const site = path.join(root, 'site');
   const map = path.join(root, 'map');
   const preview = path.join(root, 'preview');
-  for (const directory of [path.join(map, 'architecture/auto'), preview, path.join(site, 'architecture/auto'), path.join(site, 'pr-1')]) {
+  for (const directory of [path.join(map, 'architecture/auto'), path.join(preview, 'architecture/auto'), path.join(site, 'architecture/auto'),
+    path.join(site, 'comparison/pr-1/auto'), path.join(site, 'comparison/pr-2/auto')]) {
     await mkdir(directory, { recursive: true });
   }
   await writeFile(path.join(site, 'architecture/auto/obsolete.html'), 'old map');
-  await writeFile(path.join(site, 'pr-1/index.html'), 'PR preview');
+  await writeFile(path.join(site, 'comparison/pr-1/auto/index.html'), 'PR preview');
+  await writeFile(path.join(site, 'comparison/pr-2/auto/obsolete.html'), 'old PR preview');
   await writeFile(path.join(map, 'architecture/auto/index.html'), 'new map');
-  await writeFile(path.join(preview, 'index.html'), 'second PR');
+  await writeFile(path.join(preview, 'architecture/auto/index.html'), 'second PR');
   await replaceMap(site, map);
-  await replacePreview(site, preview, 2);
+  await replacePreview(site, preview, 2, 'comparison');
   assert.equal(await readFile(path.join(site, 'architecture/auto/index.html'), 'utf8'), 'new map');
-  assert.equal(await readFile(path.join(site, 'pr-1/index.html'), 'utf8'), 'PR preview');
-  assert.equal(await readFile(path.join(site, 'pr-2/index.html'), 'utf8'), 'second PR');
+  assert.equal(await readFile(path.join(site, 'comparison/pr-1/auto/index.html'), 'utf8'), 'PR preview');
+  assert.equal(await readFile(path.join(site, 'comparison/pr-2/auto/index.html'), 'utf8'), 'second PR');
+  await assert.rejects(readFile(path.join(site, 'comparison/pr-2/auto/obsolete.html')), { code: 'ENOENT' });
   await assert.rejects(readFile(path.join(site, 'architecture/auto/obsolete.html')), { code: 'ENOENT' });
 });
 
@@ -137,7 +140,7 @@ for (const changed of [null, 'head', 'base']) {
     await mkdir(exported, { recursive: true });
     await writeFile(path.join(exported, 'comparison.json'), JSON.stringify(summary));
     const base = 'c'.repeat(40);
-    const result = await publicationContext({ number: 42, base, directory, theme: 'auto' }, async route => {
+    const result = await publicationContext({ number: 42, base, directory, theme: 'auto', layout: 'comparison' }, async route => {
       assert.equal(route, '/pulls/42');
       return {
         head: { sha: changed === 'head' ? 'd'.repeat(40) : summary.revision },

@@ -331,11 +331,11 @@ jobs:
           NODE
       - uses: actions/checkout@v7.0.1
 
-      - name: Build architecture website
+      - name: Export committed architecture
         id: map
         uses: MrLesk/groma.md-action@v1
         with:
-          groma-version: '0.7.7'
+          revision: ${{ github.sha }}
           theme: ${{ env.GROMA_THEME }}
 
       - uses: actions/upload-artifact@v7.0.2
@@ -354,7 +354,7 @@ jobs:
     # The map shares one Pages site with PR comparisons. Serialize publication.
     concurrency:
       group: groma-pages
-      cancel-in-progress: false
+      queue: max
     environment:
       name: github-pages
       url: ${{ steps.map.outputs.url }}

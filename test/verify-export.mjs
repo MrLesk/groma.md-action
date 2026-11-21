@@ -5,11 +5,18 @@ import path from 'node:path';
 import { readPayload } from '../comparison.mjs';
 
 const directory = process.argv[2];
+const mode = process.argv[3];
 const snapshot = readPayload(await readFile(path.join(directory, 'index.html'), 'utf8'));
 assert.equal(snapshot.delivery.kind, 'published');
 const sources = snapshot.delivery.views[0].reads.sources.map(item => item.file).sort();
 assert.deepEqual(sources, ['src/catalog.ts', 'src/client.js']);
-if (process.argv[3] === 'comparison') {
+if (mode === 'committed') {
+  assert.equal(snapshot.revision.id, process.argv[4]);
+  const client = snapshot.delivery.views[0].reads.sources.find(item => item.file === 'src/client.js');
+  assert.match(client.source.source, /updated catalog/);
+  assert.equal(existsSync('scanner-executed'), false, 'Committed map must not execute the local scanner module');
+  console.log('The requested revision exported with a configured Backlog work source.');
+} else if (mode === 'comparison') {
   const summary = JSON.parse(await readFile(path.join(directory, 'comparison.json'), 'utf8'));
   assert.deepEqual(summary.components, { added: 0, modified: 1, removed: 0 });
   assert.deepEqual(summary.relationships, { added: 0, modified: 0, removed: 0 });

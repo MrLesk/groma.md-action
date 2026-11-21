@@ -26,17 +26,19 @@ Keep your publisher. Run the build Action with `from` and `revision` (check out 
 
 ## Publish a current map
 
-For a repository without a Pages site, set the Pages source to **GitHub Actions** and copy [`examples/pages.yml`](examples/pages.yml): it scans each push to the default branch and publishes its map at `/architecture/blueprint/`. It uses the same publisher as PR comparisons, so the map and the previews share one site, kept on the `groma-previews` branch. Each publication replaces only its own directory, and a build that is no longer the default-branch head is skipped. A private repository needs private Pages visibility, as for PR comparisons. To add the map to a site you already build:
+For a repository without a Pages site, set the Pages source to **GitHub Actions** and copy [`examples/pages.yml`](examples/pages.yml). It exports the committed architecture on each push to the default branch and publishes it at `/architecture/blueprint/`. The map and PR previews share the site on the `groma-previews` branch. Each publication replaces only its own directory. The PR workflow can publish while the map workflow fails, and the site keeps the last published map. The publisher skips builds that are out of date. A private repository needs private Pages visibility, as for PR comparisons.
+
+To add a committed map to a site you already build:
 
 ```yaml
 - uses: MrLesk/groma.md-action@v1
   with:
-    groma-version: '0.7.8'
+    revision: ${{ github.sha }}
     output: site # your built site
     theme: blueprint
 ```
 
-The Action requires Groma 0.7 or newer. It lets the CLI convert an existing `scanners.json` before reading `config.json`, then restores missing plugins and updates npm scanners to their latest compatible releases before scanning and exporting. Background updates are disabled only in the CI working copy so they cannot race the export. Scanner settings and Backlog selection are preserved. It doesn't initialize Groma.
+The Action requires Groma 0.7 or newer. Set `revision` to export one commit without loading the project's plugins. Leave `revision` and `from` unset to scan the checkout before exporting. In scan mode the CLI converts an existing `scanners.json`, restores missing plugins and updates npm scanners to their latest compatible releases. The Action disables background updates in its working copy so the scan and export use the same versions.
 
 ## Inputs and outputs
 
@@ -45,9 +47,9 @@ The Action requires Groma 0.7 or newer. It lets the CLI convert an existing `sca
 | `groma-version` | `0.7.8` | Groma CLI version; pin it to control reader upgrades |
 | `output` | `groma-site` | Website root, relative to the checkout |
 | `theme` | `auto` | `auto`, `light`, `dark` or `blueprint` |
-| `exclude` | | Extra scan exclusions, one per line; not for comparisons |
+| `exclude` | | Extra scan exclusions, one per line. Requires scan mode. |
 | `from` | | Earlier commit to compare, with `revision` |
-| `revision` | | Later commit to compare, with `from` |
+| `revision` | | Commit to export. Add `from` to compare two commits. |
 
 | Output | Meaning |
 | --- | --- |
@@ -56,6 +58,10 @@ The Action requires Groma 0.7 or newer. It lets the CLI convert an existing `sca
 | `summary` | Comparison JSON with the change counts; empty without `from` |
 
 The default is Groma 0.7.8. `@v1` follows Action releases, which can change that default. Set `groma-version` to an exact release to keep reader upgrades explicit.
+
+The publisher uses `pr-<number>/architecture/<theme>/` for previews. Set `preview-layout: comparison` when calling the publish Action to keep existing `comparison/pr-<number>/<theme>/` links. Keep the existing themes for your map and previews.
+
+To migrate an existing Groma-only Pages site, seed `groma-previews` with the full contents of the current site. Include a root `.groma-previews` file containing the line `Groma PR previews` followed by a newline. Switch from the previous deployment workflow to the Groma publisher once that branch is ready. Sites that also publish other content can keep using their existing publisher.
 
 Both comparison commits must contain architecture that the selected Groma version can read. After a format change, update an older PR from its base branch so its merge base and head use the current format. Choosing a version does not convert committed architecture.
 
