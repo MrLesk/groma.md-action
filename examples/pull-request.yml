@@ -7,8 +7,9 @@ on:
         description: PR number to compare after review
         required: true
         type: number
-  pull_request_target:
-    types: [opened, synchronize, reopened, edited]
+  workflow_run:
+    workflows: [Groma PR request]
+    types: [completed]
 
 permissions: {}
 
@@ -18,8 +19,11 @@ env:
 jobs:
   compare:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -342,32 +346,52 @@ jobs:
           NODE
       - name: Select the pull request
         id: pull
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ inputs.pull-request || github.event.pull_request.number }}
+          NUMBER: ${{ inputs.pull-request }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" \
-            --jq '"number=\(.number)\nbase=\(.base.sha)\nhead=\(.head.sha)"' >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            pull=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER")
+          else
+            pull=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" \
+              -f state=open -f "base=$DEFAULT_BRANCH" -f "head=$GITHUB_REPOSITORY_OWNER:$HEAD_BRANCH" |
+              jq -c --arg repo "$GITHUB_REPOSITORY" --arg sha "$HEAD_SHA" '
+                map(select(.head.repo.full_name == $repo and .head.sha == $sha)) |
+                if length == 1 then .[0] else empty end')
+            if [[ -z "$pull" ]]; then
+              echo "The requested PR revision is no longer current."
+              exit 0
+            fi
+          fi
+          jq -r '"number=\(.number)\nbase=\(.base.sha)\nhead=\(.head.sha)"' <<< "$pull" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7.0.1
+        if: steps.pull.outputs.number != ''
         with:
-          ref: ${{ steps.pull.outputs.base }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Find the PR comparison base
         id: commits
+        if: steps.pull.outputs.number != ''
         env:
           BASE: ${{ steps.pull.outputs.base }}
           HEAD: ${{ steps.pull.outputs.head }}
-        # Keep the trusted base checked out; export reads the PR commit from Git.
+        # The default branch stays checked out. The PR commits are Git data.
         run: |
-          git fetch --no-tags origin "$HEAD"
+          git fetch --no-tags origin "$BASE" "$HEAD"
           echo "from=$(git merge-base "$BASE" "$HEAD")" >> "$GITHUB_OUTPUT"
       - uses: MrLesk/groma.md-action@v1
         id: map
+        if: steps.pull.outputs.number != ''
         with:
           from: ${{ steps.commits.outputs.from }}
           revision: ${{ steps.pull.outputs.head }}
       - uses: actions/upload-artifact@v7.0.2
+        if: steps.pull.outputs.number != ''
         with:
           name: groma-comparison
           path: ${{ steps.map.outputs.output }}
@@ -375,6 +399,7 @@ jobs:
 
   publish:
     needs: compare
+    if: needs.compare.outputs.number != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write

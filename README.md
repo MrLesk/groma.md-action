@@ -10,9 +10,13 @@ For repositories without an existing GitHub Pages site:
 
 1. Commit your Groma architecture (`groma/` or `.groma/`) to your default branch. [New to Groma?](https://github.com/MrLesk/groma.md#get-started)
 2. In **Settings → Pages**, set the source to **GitHub Actions**. In a private repository, also set the visibility to **Private** (GitHub Enterprise Cloud).
-3. Copy [`examples/pull-request.yml`](examples/pull-request.yml) to `.github/workflows/groma-pr.yml` on your default branch.
+3. Copy [`examples/pull-request-signal.yml`](examples/pull-request-signal.yml) to `.github/workflows/groma-pr-request.yml` and [`examples/pull-request.yml`](examples/pull-request.yml) to `.github/workflows/groma-pr.yml`. Commit both files to your default branch.
 
-PRs from the same repository get the comment, updated on each push. The map compares the PR with its merge base, so it shows what the PR introduces. No account or secret needed: the workflow uses `GITHUB_TOKEN`. Fork PRs wait for a maintainer: after review, open **Actions → Groma PR comparison → Run workflow** on the default branch and enter the PR number. This approves one comparison; later fork pushes do not trigger another export.
+Same-repository PRs targeting the default branch get an automatic comparison with their merge base. The workflows use the built-in `GITHUB_TOKEN`. For a reviewed fork PR, open **Actions → Groma PR comparison → Run workflow** on the default branch and enter the PR number. Run it again after reviewing new commits on that fork.
+
+### Upgrade an existing workflow
+
+GitHub will enforce its default block on `pull_request_target` for affected public repositories on December 2, 2026. Add the request workflow and update the comparison workflow to use the `workflow_run` trigger from the example. Keep your existing output layout, theme, and publisher settings. Commit both workflow changes together to keep automatic previews working without a repository-wide policy exception. See [GitHub's event policy](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target#default-policy-for-pull_request_target).
 
 ### Existing Pages sites
 
@@ -20,7 +24,8 @@ Keep your publisher. Run the build Action with `from` and `revision` (check out 
 
 ### What runs on a PR
 
-- `compare` is read-only. It keeps the trusted base checked out and fetches the PR commit as data. Groma exports both committed snapshots from an empty temporary working directory, without project plugin configuration, scanning, installing application dependencies or running PR scripts. The checkout's settings remain unchanged. Keep checkout's fork protection enabled.
+- `Groma PR request` signals the default-branch comparison workflow with a regular `pull_request` event. It checks out no files and passes no artifacts or permissions to the publisher.
+- `compare` resolves the current PR and exact commits through GitHub. It checks out the trusted default branch and fetches the PR commits as Git data. Groma exports both snapshots without loading project plugins, scanning, installing application dependencies, or running PR scripts.
 - `publish` receives the selected PR number and exact base commit, deploys the preview to Pages and updates the comment. It skips publication if the PR head or base has changed. Keep PR-supplied commands out of this job.
 - Previews stay at `/pr-<number>/architecture/auto/` after the PR closes. They are public unless the repository is private: a private repository needs private Pages visibility, because previews include source code, and the publisher refuses to deploy it to a public site.
 
