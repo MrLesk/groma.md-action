@@ -72,6 +72,12 @@ runs:
       if: steps.store.outputs.ready == 'true'
       with:
         path: ${{ steps.store.outputs.site }}
+    # A finalized upload can briefly be missing from the deploy action's list.
+    # Remove this pause when actions/deploy-pages#451 is fixed in a release.
+    - name: Allow the Pages artifact list to catch up
+      if: steps.store.outputs.ready == 'true'
+      shell: bash
+      run: sleep 10
     - uses: actions/deploy-pages@v5.0.1
       env:
         NODE_OPTIONS: --use-openssl-ca
